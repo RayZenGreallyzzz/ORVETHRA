@@ -1,4 +1,4 @@
-name: ORVETHRA Android Debug
+name: ORVETHRA Android Debug v0.5
 
 on:
   push:
@@ -17,11 +17,14 @@ jobs:
     steps:
       - name: Checkout ORVETHRA
         uses: actions/checkout@v4
-      - name: Use previous full v0.4 street if archive was uploaded
+      - name: Import complete ORVETHRA v0.5 source
         shell: bash
         run: |
           set -euo pipefail
-          if [ -f Aetherfall_Android_Build_Kit_v04.zip ]; then
+          if [ -f ORVETHRA_v05_Source.zip ]; then
+            echo "Importing complete ORVETHRA v0.5 street and approved menu artwork"
+            unzip -oq ORVETHRA_v05_Source.zip -d .
+          elif [ -f Aetherfall_Android_Build_Kit_v04.zip ]; then
             echo "Importing complete v0.4 street source package"
             unzip -oq Aetherfall_Android_Build_Kit_v04.zip -d .
             sed -i 's/Aetherfall | Android Test v0.4/ORVETHRA | Android Test v0.4/g; s/Aetherfall/ORVETHRA/g' project.godot
@@ -71,6 +74,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ORVETHRA-IT801C-debug
+          name: ORVETHRA-v05-IT801C-debug
           path: build/ORVETHRA-IT801C-debug.apk
           retention-days: 14
