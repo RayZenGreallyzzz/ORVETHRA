@@ -37,6 +37,11 @@ jobs:
           set -euo pipefail
           godot --headless --path . --editor --import --quit 2>&1 | tee build/import.log
           if grep -E 'SCRIPT ERROR|Parse Error:|Failed to load script|ERROR: Cannot open' build/import.log; then exit 1; fi
+      - name: Headless startup smoke test
+        run: |
+          set -euo pipefail
+          godot --headless --path . --quit-after 6 2>&1 | tee build/startup.log
+          if grep -E 'SCRIPT ERROR|Invalid call|Invalid access|Parse Error:|ERROR: Failed to load script' build/startup.log; then exit 1; fi
       - name: Export Android debug APK
         run: |
           set -euo pipefail
