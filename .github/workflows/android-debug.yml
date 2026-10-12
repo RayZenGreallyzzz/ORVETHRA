@@ -30,6 +30,10 @@ jobs:
             echo "Building lightweight ORVETHRA repository test scene"
           fi
           mkdir -p build
+          # Required by Android export even when runner imports using x86-64.
+          if ! grep -q '^textures/vram_compression/import_etc2_astc=true' project.godot; then
+            sed -i '/^\[rendering\]/a textures/vram_compression/import_etc2_astc=true' project.godot
+          fi
           # Works both with the tiny starter scene and with the full uploaded ZIP.
           if ! grep -q '^keystore/debug=' export_presets.cfg; then
             printf '\nkeystore/debug="/root/debug.keystore"\nkeystore/debug_user="androiddebugkey"\nkeystore/debug_password="android"\n' >> export_presets.cfg
