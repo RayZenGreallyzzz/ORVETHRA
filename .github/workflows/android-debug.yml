@@ -1,0 +1,67 @@
+name: ORVETHRA Android Debug
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout ORVETHRA
+        uses: actions/checkout@v4
+      - name: Use previous full v0.4 street if archive was uploaded
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f Aetherfall_Android_Build_Kit_v04.zip ]; then
+            echo "Importing complete v0.4 street source package"
+            unzip -oq Aetherfall_Android_Build_Kit_v04.zip -d .
+            sed -i 's/Aetherfall | Android Test v0.4/ORVETHRA | Android Test v0.4/g; s/Aetherfall/ORVETHRA/g' project.godot
+            sed -i 's@org.aetherfall.streettest@game.orvethra.test@g; s/package\/name="Aetherfall"/package\/name="ORVETHRA"/g' export_presets.cfg
+          else
+            echo "Building lightweight ORVETHRA repository test scene"
+          fi
+          mkdir -p build
+      - name: Setup Godot export templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/share/godot/export_templates" "$HOME/.config/godot"
+          if [ -d /root/.local/share/godot/export_templates ]; then
+            cp -a /root/.local/share/godot/export_templates/. "$HOME/.local/share/godot/export_templates/" || true
+          fi
+          if [ -d /root/.config/godot ]; then
+            cp -a /root/.config/godot/. "$HOME/.config/godot/" || true
+          fi
+          godot --version
+          find "$HOME/.local/share/godot/export_templates" -maxdepth 2 -type f | head -10 || true
+      - name: Import and validate project
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --editor --import --quit 2>&1 | tee build/import.log
+          if grep -E 'SCRIPT ERROR|Parse Error:|ERROR: Cannot open' build/import.log; then
+            echo "Godot import or GDScript error"
+            exit 1
+          fi
+      - name: Export unsigned release-style debug test APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --export-debug Android build/ORVETHRA-IT801C-debug.apk
+          test -s build/ORVETHRA-IT801C-debug.apk
+          ls -lh build/ORVETHRA-IT801C-debug.apk
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ORVETHRA-IT801C-debug
+          path: build/ORVETHRA-IT801C-debug.apk
+          retention-days: 14
