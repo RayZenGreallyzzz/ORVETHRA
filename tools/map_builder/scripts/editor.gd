@@ -255,7 +255,10 @@ func _import_glb(path: String) -> void:
         return
     var bytes := f.get_buffer(size)
     f.close()
-    var name := bytes.md5_text().substr(0, 16) + ".glb"
+    var hasher := HashingContext.new()
+    hasher.start(HashingContext.HASH_SHA256)
+    hasher.update(bytes)
+    var name: String = hasher.finish().hex_encode().substr(0, 16) + ".glb"
     if not FileAccess.file_exists(ASSET_DIR + "/" + name):
         if cached.size() >= MAX_CUSTOM_MODELS:
             _notify("Пока поддерживается до 4 разных пользовательских моделей.")
