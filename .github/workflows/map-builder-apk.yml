@@ -1,0 +1,51 @@
+name: ORVETHRA Map Builder APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tools/map_builder/**"
+      - ".github/workflows/map-builder-apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    container:
+      image: barichello/godot-ci:4.6
+    defaults:
+      run:
+        working-directory: tools/map_builder
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Godot export templates
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/share/godot/export_templates" "$HOME/.config/godot"
+          if [ -d /root/.local/share/godot/export_templates ]; then cp -a /root/.local/share/godot/export_templates/. "$HOME/.local/share/godot/export_templates/" || true; fi
+          if [ -d /root/.config/godot ]; then cp -a /root/.config/godot/. "$HOME/.config/godot/" || true; fi
+          godot --version
+          mkdir -p build
+      - name: Validate scripts and import
+        run: |
+          set -euo pipefail
+          godot --headless --path . --editor --import --quit 2>&1 | tee build/import.log
+          if grep -E 'SCRIPT ERROR|Parse Error:|Failed to load script|ERROR: Cannot open' build/import.log; then exit 1; fi
+      - name: Export Android debug APK
+        run: |
+          set -euo pipefail
+          godot --headless --path . --export-debug Android build/ORVETHRA-Map-Builder-v01.apk
+          test -s build/ORVETHRA-Map-Builder-v01.apk
+          ls -lh build/ORVETHRA-Map-Builder-v01.apk
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ORVETHRA-Map-Builder-v01-Android
+          path: tools/map_builder/build/ORVETHRA-Map-Builder-v01.apk
+          retention-days: 14
