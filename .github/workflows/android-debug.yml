@@ -1,4 +1,4 @@
-name: ORVETHRA Android Debug v0.5
+name: ORVETHRA Android Debug v0.6
 
 on:
   push:
@@ -17,27 +17,21 @@ jobs:
     steps:
       - name: Checkout ORVETHRA
         uses: actions/checkout@v4
-      - name: Import complete ORVETHRA v0.5 source
+      - name: Verify committed Godot source
         shell: bash
         run: |
           set -euo pipefail
-          if [ -f ORVETHRA_v05_Source.zip ]; then
-            echo "Importing complete ORVETHRA v0.5 street and approved menu artwork"
-            unzip -oq ORVETHRA_v05_Source.zip -d .
-          elif [ -f Aetherfall_Android_Build_Kit_v04.zip ]; then
-            echo "Importing complete v0.4 street source package"
-            unzip -oq Aetherfall_Android_Build_Kit_v04.zip -d .
-            sed -i 's/Aetherfall | Android Test v0.4/ORVETHRA | Android Test v0.4/g; s/Aetherfall/ORVETHRA/g' project.godot
-            sed -i 's@org.aetherfall.streettest@game.orvethra.test@g; s/package\/name="Aetherfall"/package\/name="ORVETHRA"/g' export_presets.cfg
-          else
-            echo "Building lightweight ORVETHRA repository test scene"
-          fi
+          test -s assets/title_cover.jpg
+          test -s scripts/main_menu.gd
+          test -s scripts/town.gd
+          test -s scripts/combat.gd
+          test -s scenes/combat.tscn
+          grep -q 'res://scenes/main_menu.tscn' project.godot
+          echo "Verified ORVETHRA v0.6 project source (no archive overwrite)"
           mkdir -p build
-          # Required by Android export even when runner imports using x86-64.
           if ! grep -q '^textures/vram_compression/import_etc2_astc=true' project.godot; then
             sed -i '/^\[rendering\]/a textures/vram_compression/import_etc2_astc=true' project.godot
           fi
-          # Works both with the tiny starter scene and with the full uploaded ZIP.
           if ! grep -q '^keystore/debug=' export_presets.cfg; then
             printf '\nkeystore/debug="/root/debug.keystore"\nkeystore/debug_user="androiddebugkey"\nkeystore/debug_password="android"\n' >> export_presets.cfg
           fi
@@ -64,7 +58,7 @@ jobs:
             echo "Godot import or GDScript error"
             exit 1
           fi
-      - name: Export unsigned release-style debug test APK
+      - name: Export signed debug test APK
         shell: bash
         run: |
           set -euo pipefail
@@ -74,6 +68,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ORVETHRA-v05-IT801C-debug
+          name: ORVETHRA-v06-IT801C-debug
           path: build/ORVETHRA-IT801C-debug.apk
           retention-days: 14
