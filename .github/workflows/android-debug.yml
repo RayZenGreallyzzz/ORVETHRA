@@ -30,6 +30,10 @@ jobs:
             echo "Building lightweight ORVETHRA repository test scene"
           fi
           mkdir -p build
+          # Works both with the tiny starter scene and with the full uploaded ZIP.
+          if ! grep -q '^keystore/debug=' export_presets.cfg; then
+            printf '\nkeystore/debug="/root/debug.keystore"\nkeystore/debug_user="androiddebugkey"\nkeystore/debug_password="android"\n' >> export_presets.cfg
+          fi
       - name: Setup Godot export templates
         shell: bash
         run: |
@@ -42,6 +46,7 @@ jobs:
             cp -a /root/.config/godot/. "$HOME/.config/godot/" || true
           fi
           godot --version
+          ls -l /root/debug.keystore || true
           find "$HOME/.local/share/godot/export_templates" -maxdepth 2 -type f | head -10 || true
       - name: Import and validate project
         shell: bash
@@ -56,7 +61,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          godot --headless --path . --export-debug Android build/ORVETHRA-IT801C-debug.apk
+          godot --headless --verbose --path . --export-debug Android build/ORVETHRA-IT801C-debug.apk
           test -s build/ORVETHRA-IT801C-debug.apk
           ls -lh build/ORVETHRA-IT801C-debug.apk
       - name: Upload APK
