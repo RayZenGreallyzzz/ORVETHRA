@@ -1,8 +1,8 @@
-# ORVETHRA Map Builder v0.1 — Android
+# ORVETHRA Map Builder v0.2 — Android
 
 Separate editing app; not the game itself. Godot 4.6 Compatibility renderer (OpenGL ES). Optimized *targets* for IT-801C (A523, 4 GB RAM); real device validation still needed.
 
-**Camera**: drag on free world surface with one finger to orbit; pinch to zoom. On PC right mouse drag and mouse wheel.
+**Camera**: orbit is no longer locked to the centre. One-finger drag orbits in object modes; select «✥ Сдвиг камеры» to pan with one finger. Two fingers pan (move together) and zoom (pinch/spread) in every mode. «◎ К объекту» centres view on a selected model; «⌂ Центр карты» returns to origin. On desktop right mouse rotates, middle mouse or Shift+left pans, scroll zooms. Camera position/rotation/zoom are saved alongside the map and restored on reopening.
 
 **Placing**: choose a prefab, press "Поставить", tap the ground. Use "Выбрать" then "Переместить" and tap another location. Buttons rotate, resize, duplicate or delete.
 

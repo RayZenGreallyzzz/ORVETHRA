@@ -45,12 +45,12 @@ jobs:
       - name: Export Android debug APK
         run: |
           set -euo pipefail
-          godot --headless --path . --export-debug Android build/ORVETHRA-Map-Builder-v01.apk
-          test -s build/ORVETHRA-Map-Builder-v01.apk
-          ls -lh build/ORVETHRA-Map-Builder-v01.apk
+          godot --headless --path . --export-debug Android build/ORVETHRA-Map-Builder-v02.apk
+          test -s build/ORVETHRA-Map-Builder-v02.apk
+          ls -lh build/ORVETHRA-Map-Builder-v02.apk
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ORVETHRA-Map-Builder-v01-Android
-          path: tools/map_builder/build/ORVETHRA-Map-Builder-v01.apk
+          name: ORVETHRA-Map-Builder-v02-Android
+          path: tools/map_builder/build/ORVETHRA-Map-Builder-v02.apk
           retention-days: 14
