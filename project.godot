@@ -1,8 +1,8 @@
 config_version=5
 
 [application]
-config/name="ORVETHRA"
-run/main_scene="res://scenes/town.tscn"
+config/name="ORVETHRA | v0.5"
+run/main_scene="res://scenes/main_menu.tscn"
 config/features=PackedStringArray("4.3", "GL Compatibility")
 
 [display]
