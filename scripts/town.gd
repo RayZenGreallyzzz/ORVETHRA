@@ -25,6 +25,8 @@ func _ready() -> void:
 	_player()
 	_ui()
 	_set_quality(false)
+	var combat_scene: PackedScene = load("res://scenes/combat.tscn")
+	add_child(combat_scene.instantiate())
 
 func _material(hex: String, alpha: float = 1.0, emissive: bool = false) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()

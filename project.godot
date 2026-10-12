@@ -1,7 +1,7 @@
 config_version=5
 
 [application]
-config/name="ORVETHRA | v0.5"
+config/name="ORVETHRA | v0.6"
 run/main_scene="res://scenes/main_menu.tscn"
 config/features=PackedStringArray("4.3", "GL Compatibility")
 
