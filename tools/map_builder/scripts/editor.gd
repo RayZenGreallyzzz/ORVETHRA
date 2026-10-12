@@ -21,6 +21,7 @@ var distance := 45.0
 var focus := Vector3(0, 0, 0)
 var touched: Dictionary = {}
 var pressed_at: Dictionary = {}
+var blocked_taps: Dictionary = {}
 var overlay: Control
 var details: Label
 var action_label: Label
@@ -166,7 +167,7 @@ func _insert(kind: String, pos: Vector3) -> void:
         _refresh()
 
 func _save_auto() -> void:
-    var record := {"format": "ORVETHRA-MAP", "version": 1, "objects": []}
+    var record := {"format": "ORVETHRA-MAP", "version": 1, "camera": {"focus": [focus.x, focus.y, focus.z], "yaw": yaw, "pitch": pitch, "distance": distance}, "objects": []}
     for entry in entries:
         record["objects"].append({"kind": entry["kind"], "asset": entry["asset"], "pos": entry["pos"], "yaw": entry["yaw"], "scale": entry["scale"]})
     var file := FileAccess.open(AUTOSAVE, FileAccess.WRITE)
@@ -196,6 +197,15 @@ func _load_data(value: Dictionary) -> void:
             continue
         var position := Vector3(clampf(float(loc[0]), -60, 60), clampf(float(loc[1]), -10, 10), clampf(float(loc[2]), -60, 60))
         _add_rendered(str(entry.get("kind", "Дом")), str(entry.get("asset", "")), position, float(entry.get("yaw", 0.0)), clampf(float(entry.get("scale", 1)), 0.2, 3))
+    var camera_data: Variant = value.get("camera", {})
+    if camera_data is Dictionary:
+        var saved_focus: Variant = camera_data.get("focus", [0.0, 0.0, 0.0])
+        if saved_focus is Array and saved_focus.size() == 3:
+            focus = Vector3(clampf(float(saved_focus[0]), -65.0, 65.0), 0.0, clampf(float(saved_focus[2]), -65.0, 65.0))
+        yaw = float(camera_data.get("yaw", yaw))
+        pitch = clampf(float(camera_data.get("pitch", pitch)), 0.18, 1.47)
+        distance = clampf(float(camera_data.get("distance", distance)), 7.0, 94.0)
+        _update_cam()
     _save_auto()
     _refresh()
 
@@ -465,7 +475,7 @@ func _build_ui() -> void:
     _ui_button(buttons, "Открыть карту", func(): map_dialog.popup_centered_ratio(0.75))
     _ui_button(buttons, "Экспорт карты", func(): _export("project"), "32534a")
     _ui_button(buttons, "Экспорт GLB", func(): _export("glb"), "32534a")
-    var left := _panel(Vector2(12, 88), Vector2(208, 390))
+    var left := _panel(Vector2(12, 88), Vector2(208, 460))
     _text(left, "БИБЛИОТЕКА")
     palette_choice = OptionButton.new()
     for item in ["Дом","Кузница","Лавка","Дорога","Дерево","Камень","Забор","Ворота","Фонарь","GLB"]:
@@ -475,8 +485,9 @@ func _build_ui() -> void:
     _ui_button(left, "＋ Поставить", func(): tool = "place"; _refresh())
     _ui_button(left, "◎ Выбрать", func(): tool = "select"; _refresh())
     _ui_button(left, "↔ Переместить", func(): tool = "move"; _refresh())
+    _ui_button(left, "✥ Сдвиг камеры", func(): tool = "camera"; _notify("Веди пальцем по карте. В других режимах сдвиг двумя пальцами."))
     _ui_button(left, "Новая карта", func(): _clear_map())
-    var right := _panel(Vector2(1037, 88), Vector2(220, 390))
+    var right := _panel(Vector2(1037, 88), Vector2(220, 510))
     _text(right, "ОБЪЕКТ")
     details = _text(right, "Не выбран")
     _ui_button(right, "⟲ Повернуть −15°", func(): _adjust(0, -PI/12.0, 0))
@@ -485,8 +496,10 @@ func _build_ui() -> void:
     _ui_button(right, "Увеличить", func(): _adjust(0, 0, 0.1))
     _ui_button(right, "Копировать", func(): _duplicate())
     _ui_button(right, "Удалить", func(): _delete())
+    _ui_button(right, "◎ К объекту", func(): _camera_to_selection())
+    _ui_button(right, "⌂ Центр карты", func(): _camera_reset())
     var bottom := _panel(Vector2(12, 626), Vector2(1130, 69))
-    action_label = _text(bottom, "Один палец — крутить камеру • два пальца — приблизить")
+    action_label = _text(bottom, "Один палец: вращать/двигать • два пальца: двигать/приближать")
     action_label.add_theme_font_size_override("font_size", 15)
 
 func _notify(message: String) -> void:
@@ -553,6 +566,41 @@ func _update_cam() -> void:
     cam.position = focus + Vector3(sin(yaw) * cos(pitch), sin(pitch), cos(yaw) * cos(pitch)) * distance
     cam.look_at(focus, Vector3.UP)
 
+# The camera rotates around a movable focus; it is not tied to the map centre.
+func _pan_by_pixels(pixel_delta: Vector2) -> void:
+    var view_height := maxf(1.0, get_viewport().get_visible_rect().size.y)
+    var per_pixel := 2.0 * distance * tan(deg_to_rad(cam.fov) * 0.5) / view_height
+    var screen_right := Vector3(cos(yaw), 0.0, -sin(yaw))
+    var screen_up := Vector3(-sin(yaw), 0.0, -cos(yaw))
+    var step := screen_right * (-pixel_delta.x * per_pixel)
+    step += screen_up * (pixel_delta.y * per_pixel / maxf(sin(pitch), 0.35))
+    if step.length() > 12.0:
+        step = step.normalized() * 12.0
+    focus += step
+    focus.x = clampf(focus.x, -65.0, 65.0)
+    focus.z = clampf(focus.z, -65.0, 65.0)
+    _update_cam()
+    _dirty()
+
+func _camera_to_selection() -> void:
+    if selected < 0 or selected >= entries.size():
+        _notify("Сначала выбери дом или объект.")
+        return
+    var obj: Node3D = entries[selected]["node"]
+    focus = obj.global_position
+    focus.y = 0.0
+    focus.x = clampf(focus.x, -65.0, 65.0)
+    focus.z = clampf(focus.z, -65.0, 65.0)
+    _update_cam()
+    _dirty()
+    _notify("Камера наведена на выбранный объект.")
+
+func _camera_reset() -> void:
+    focus = Vector3.ZERO
+    _update_cam()
+    _dirty()
+    _notify("Камера вернулась к центру карты.")
+
 func _plane_hit(screen: Vector2) -> Variant:
     var from := cam.project_ray_origin(screen)
     var v := cam.project_ray_normal(screen)
@@ -609,39 +657,58 @@ func _unhandled_input(event: InputEvent) -> void:
         if event.pressed:
             touched[event.index] = event.position
             pressed_at[event.index] = event.position
+            if touched.size() >= 2:
+                for id in touched.keys():
+                    blocked_taps[id] = true
         else:
             if touched.has(event.index) and pressed_at.has(event.index):
-                if (pressed_at[event.index] as Vector2).distance_to(event.position) < 17 and touched.size() == 1:
+                var short_tap := (pressed_at[event.index] as Vector2).distance_to(event.position) < 17.0
+                if short_tap and touched.size() == 1 and not blocked_taps.has(event.index):
                     _tap(event.position)
             touched.erase(event.index)
             pressed_at.erase(event.index)
+            blocked_taps.erase(event.index)
     elif event is InputEventScreenDrag:
-        if touched.has(event.index):
-            if touched.size() >= 2:
-                var indices := touched.keys()
-                var other_idx: int = indices[0] if indices[0] != event.index else indices[1]
-                var other: Vector2 = touched[other_idx]
-                var before: float = (touched[event.index] as Vector2).distance_to(other)
-                var after: float = event.position.distance_to(other)
-                distance -= (after - before) * 0.07
-            else:
-                yaw -= event.relative.x * 0.005
-                pitch += event.relative.y * 0.005
-            touched[event.index] = event.position
+        if not touched.has(event.index):
+            return
+        if touched.size() >= 2:
+            var indices := touched.keys()
+            var other_idx: int = indices[0] if indices[0] != event.index else indices[1]
+            var other: Vector2 = touched[other_idx]
+            var previous: Vector2 = touched[event.index]
+            var old_middle := (previous + other) * 0.5
+            var new_middle := (event.position + other) * 0.5
+            _pan_by_pixels(new_middle - old_middle)
+            var pinch_change := event.position.distance_to(other) - previous.distance_to(other)
+            distance = clampf(distance - pinch_change * 0.07, 7.0, 94.0)
             _update_cam()
-    elif event is InputEventMouseMotion:
-        if Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
+            _dirty()
+        elif tool == "camera":
+            _pan_by_pixels(event.relative)
+        else:
             yaw -= event.relative.x * 0.005
             pitch += event.relative.y * 0.005
             _update_cam()
+            _dirty()
+        touched[event.index] = event.position
+    elif event is InputEventMouseMotion:
+        if Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE) or (Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and Input.is_key_pressed(KEY_SHIFT)):
+            _pan_by_pixels(event.relative)
+        elif Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
+            yaw -= event.relative.x * 0.005
+            pitch += event.relative.y * 0.005
+            _update_cam()
+            _dirty()
     elif event is InputEventMouseButton:
         if event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
             distance *= 0.89
             _update_cam()
+            _dirty()
         elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
             distance *= 1.12
             _update_cam()
-        elif event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+            _dirty()
+        elif event.button_index == MOUSE_BUTTON_LEFT and event.pressed and not Input.is_key_pressed(KEY_SHIFT):
             _tap(event.position)
 
 func _process(delta: float) -> void:
