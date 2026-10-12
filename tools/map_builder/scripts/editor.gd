@@ -676,10 +676,10 @@ func _unhandled_input(event: InputEvent) -> void:
             var other_idx: int = indices[0] if indices[0] != event.index else indices[1]
             var other: Vector2 = touched[other_idx]
             var previous: Vector2 = touched[event.index]
-            var old_middle := (previous + other) * 0.5
-            var new_middle := (event.position + other) * 0.5
+            var old_middle: Vector2 = (previous + other) * 0.5
+            var new_middle: Vector2 = (event.position + other) * 0.5
             _pan_by_pixels(new_middle - old_middle)
-            var pinch_change := event.position.distance_to(other) - previous.distance_to(other)
+            var pinch_change: float = event.position.distance_to(other) - previous.distance_to(other)
             distance = clampf(distance - pinch_change * 0.07, 7.0, 94.0)
             _update_cam()
             _dirty()
