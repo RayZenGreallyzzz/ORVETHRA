@@ -1,4 +1,4 @@
-name: ORVETHRA Android Debug v0.6
+name: ORVETHRA City Preview Android v0.7
 
 on:
   push:
@@ -26,8 +26,10 @@ jobs:
           test -s scripts/town.gd
           test -s scripts/combat.gd
           test -s scenes/combat.tscn
+          test -s scenes/city_preview.tscn
+          test -s scripts/city_preview.gd
           grep -q 'res://scenes/main_menu.tscn' project.godot
-          echo "Verified ORVETHRA v0.6 project source (no archive overwrite)"
+          echo "Verified ORVETHRA old-town preview project source (no archive overwrite)"
           mkdir -p build
           if ! grep -q '^textures/vram_compression/import_etc2_astc=true' project.godot; then
             sed -i '/^\[rendering\]/a textures/vram_compression/import_etc2_astc=true' project.godot
@@ -58,6 +60,15 @@ jobs:
             echo "Godot import or GDScript error"
             exit 1
           fi
+      - name: Check city scene starts headlessly
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 55 godot --headless --path . res://scenes/city_preview.tscn --quit-after 3 2>&1 | tee build/city-check.log
+          if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call|ERROR: Failed loading' build/city-check.log; then
+            echo "City scene runtime error"
+            exit 1
+          fi
       - name: Export signed debug test APK
         shell: bash
         run: |
@@ -68,6 +79,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ORVETHRA-v06-IT801C-debug
+          name: ORVETHRA-City-Preview-v07-Android
           path: build/ORVETHRA-IT801C-debug.apk
           retention-days: 14
