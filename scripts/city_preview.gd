@@ -21,7 +21,7 @@ var status: Label
 var overview_button: Button
 var roads: Array[PackedVector2Array] = []
 
-const STONE_SHADER := "
+const STONE_SHADER := """
 shader_type spatial;
 render_mode cull_disabled;
 varying vec3 world_pos;
@@ -49,8 +49,8 @@ void fragment() {
     ALBEDO = mix(rock, mortar, joint);
     ROUGHNESS = 0.98;
 }
-"
-const GRASS_SHADER := "
+"""
+const GRASS_SHADER := """
 shader_type spatial;
 render_mode cull_disabled;
 varying vec3 world_pos;
@@ -65,7 +65,7 @@ void fragment() {
     ALBEDO = base + vec3(0.10, 0.09, 0.045) * (n - 0.5) + blades * 0.017;
     ROUGHNESS = 1.0;
 }
-"
+"""
 
 func _ready() -> void:
     Engine.max_fps = 30
@@ -215,6 +215,7 @@ func _ring(radius: float, width: float, y: float, material: Material) -> void:
 func _layout() -> void:
     var cobble := _make_shader(STONE_SHADER)
     var kerb := _plain("77796f")
+    kerb.cull_mode = BaseMaterial3D.CULL_DISABLED
     # Winding old-town road graph based on the approved radial, irregular sketch:
     # broad central square, branching alleys, no modern rectangular grid.
     roads = [
