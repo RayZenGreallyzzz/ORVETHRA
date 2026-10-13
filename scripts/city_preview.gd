@@ -4,6 +4,7 @@ extends Node3D
 # No 19k x 17k PNG: road ribbons are geometry and pavement is world-space tiled.
 const MAP_HALF_X := 107.0
 const MAP_HALF_Z := 93.0
+const HERO_SCENE_PATH := "res://assets/characters/ORVETHRA_NeonAlleycat_Animated_Mobile.glb"
 var player: CharacterBody3D
 var camera: Camera3D
 var yaw := 0.0
@@ -20,6 +21,9 @@ var frame_time := 0.0
 var status: Label
 var overview_button: Button
 var roads: Array[PackedVector2Array] = []
+var hero_visual: Node3D
+var hero_anim: AnimationPlayer
+var hero_animation := ""
 
 const STONE_SHADER := """
 shader_type spatial;
@@ -247,11 +251,47 @@ func _layout() -> void:
 func _character_material(hex: String) -> StandardMaterial3D:
     return _plain(hex)
 
+func _find_animation_player(node: Node):
+    if node is AnimationPlayer:
+        return node
+    for child in node.get_children():
+        var found = _find_animation_player(child)
+        if found != null:
+            return found
+    return null
+
+func _resolve_hero_animation(wanted: String) -> StringName:
+    if hero_anim == null:
+        return &""
+    var target := wanted.to_lower()
+    for anim_name in hero_anim.get_animation_list():
+        var candidate := String(anim_name)
+        var lower := candidate.to_lower()
+        if lower == target or lower.ends_with("/" + target) or lower.ends_with(target):
+            return anim_name
+    return &""
+
+func _play_hero(wanted: String) -> void:
+    if hero_anim == null or hero_animation == wanted:
+        return
+    var resolved := _resolve_hero_animation(wanted)
+    if resolved == &"":
+        return
+    hero_anim.play(resolved, 0.16)
+    hero_animation = wanted
+
+func _disable_hero_shadows(node: Node) -> void:
+    if node is GeometryInstance3D:
+        node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    for child in node.get_children():
+        _disable_hero_shadows(child)
+
 func _player() -> void:
     player = CharacterBody3D.new()
     player.name = "CityExplorer"
     player.position = Vector3(0, 0.12, 11)
     add_child(player)
+
     var collision := CollisionShape3D.new()
     var shape := CapsuleShape3D.new()
     shape.radius = 0.35
@@ -259,29 +299,18 @@ func _player() -> void:
     collision.shape = shape
     collision.position.y = 0.93
     player.add_child(collision)
-    var torso := MeshInstance3D.new()
-    var body_mesh := CapsuleMesh.new()
-    body_mesh.radius = 0.42
-    body_mesh.height = 1.42
-    torso.mesh = body_mesh
-    torso.position.y = 1.0
-    torso.material_override = _character_material("3e566c")
-    player.add_child(torso)
-    var head := MeshInstance3D.new()
-    var head_mesh := SphereMesh.new()
-    head_mesh.radius = 0.32
-    head_mesh.height = 0.64
-    head.mesh = head_mesh
-    head.position.y = 1.86
-    head.material_override = _character_material("c3a587")
-    player.add_child(head)
-    var cape := MeshInstance3D.new()
-    var cape_mesh := BoxMesh.new()
-    cape_mesh.size = Vector3(0.84, 1.32, 0.12)
-    cape.mesh = cape_mesh
-    cape.position = Vector3(0, 1.0, 0.35)
-    cape.material_override = _character_material("496d8b")
-    player.add_child(cape)
+
+    var hero_scene = load(HERO_SCENE_PATH)
+    if hero_scene is PackedScene:
+        hero_visual = hero_scene.instantiate()
+        hero_visual.name = "NeonAlleycat"
+        # The converted FBX mesh is centred vertically; lift its feet to street level.
+        hero_visual.position.y = 0.95
+        player.add_child(hero_visual)
+        _disable_hero_shadows(hero_visual)
+        hero_anim = _find_animation_player(hero_visual)
+        _play_hero("Idle")
+
     camera = Camera3D.new()
     camera.current = true
     camera.fov = 67
@@ -323,12 +352,26 @@ func _physics_process(delta: float) -> void:
         overview_center.x = clampf(overview_center.x, -MAP_HALF_X, MAP_HALF_X)
         overview_center.y = clampf(overview_center.y, -MAP_HALF_Z, MAP_HALF_Z)
         player.velocity = Vector3.ZERO
+        _play_hero("Idle")
     else:
         var forward := Vector3(-sin(yaw), 0, -cos(yaw))
         var right := Vector3(cos(yaw), 0, -sin(yaw))
         var direction := right * stick.x - forward * stick.y
         player.velocity.x = direction.x * 6.0
         player.velocity.z = direction.z * 6.0
+
+        if direction.length_squared() > 0.01:
+            # The supplied FBX set contains Idle, Run and StrafeRight.
+            # Right strafe keeps the body facing forward; normal travel turns into movement.
+            if stick.x > 0.35 and absf(stick.x) > absf(stick.y):
+                player.rotation.y = yaw
+                _play_hero("StrafeRight")
+            else:
+                player.rotation.y = atan2(-direction.x, -direction.z)
+                _play_hero("Run")
+        else:
+            _play_hero("Idle")
+
         if not player.is_on_floor():
             player.velocity.y -= 20.0 * delta
         player.move_and_slide()
@@ -373,7 +416,7 @@ func _interface() -> void:
     status.position = Vector2(15, 48)
     status.add_theme_font_size_override("font_size", 15)
     status.add_theme_color_override("font_color", Color("f1e2c9"))
-    status.text = "Примерка улиц — без зданий"
+    status.text = "Город · Neon Alleycat · Idle / Run / Strafe"
     root.add_child(status)
     var pads := Control.new()
     pads.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
@@ -419,4 +462,4 @@ func _process(delta: float) -> void:
         if overview:
             status.text = "Обзор города · стрелки — сдвиг · свайп — камера · без домов"
         else:
-            status.text = "Прогулка по брусчатке · улицы ~9 м · свайп справа — камера"
+            status.text = "Neon Alleycat · Idle / Run / StrafeRight · свайп справа — камера"

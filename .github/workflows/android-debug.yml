@@ -1,4 +1,4 @@
-name: ORVETHRA City Preview Android v0.7
+name: ORVETHRA Animated Hero Android v0.8
 
 on:
   push:
@@ -28,8 +28,9 @@ jobs:
           test -s scenes/combat.tscn
           test -s scenes/city_preview.tscn
           test -s scripts/city_preview.gd
+          test -s assets/characters/ORVETHRA_NeonAlleycat_Animated_Mobile.glb
           grep -q 'res://scenes/main_menu.tscn' project.godot
-          echo "Verified ORVETHRA old-town preview project source (no archive overwrite)"
+          echo "Verified ORVETHRA animated hero city test source"
           mkdir -p build
           if ! grep -q '^textures/vram_compression/import_etc2_astc=true' project.godot; then
             sed -i '/^\[rendering\]/a textures/vram_compression/import_etc2_astc=true' project.godot
@@ -79,6 +80,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ORVETHRA-City-Preview-v07-Android
+          name: ORVETHRA-Animated-Hero-v08-Android
           path: build/ORVETHRA-IT801C-debug.apk
           retention-days: 14
