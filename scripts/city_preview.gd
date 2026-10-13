@@ -4,7 +4,8 @@ extends Node3D
 # No 19k x 17k PNG: road ribbons are geometry and pavement is world-space tiled.
 const MAP_HALF_X := 107.0
 const MAP_HALF_Z := 93.0
-const HERO_SCENE_PATH := "res://assets/characters/ORVETHRA_NeonAlleycat_Animated_Mobile.glb"\nconst FountainMobile = preload("res://scripts/fountain_mobile.gd")
+const HERO_SCENE_PATH := "res://assets/characters/ORVETHRA_NeonAlleycat_Animated_Mobile.glb"
+const FountainMobile = preload("res://scripts/fountain_mobile.gd")
 var player: CharacterBody3D
 var camera: Camera3D
 var yaw := 0.0
