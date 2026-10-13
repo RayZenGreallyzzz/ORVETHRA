@@ -76,6 +76,7 @@ func _ready() -> void:
     _lighting()
     _ground()
     _layout()
+    FountainMobile.add_to(self)
     _player()
     _interface()
     _update_camera()
