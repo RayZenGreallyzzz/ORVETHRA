@@ -4,7 +4,7 @@ extends Node3D
 # No 19k x 17k PNG: road ribbons are geometry and pavement is world-space tiled.
 const MAP_HALF_X := 107.0
 const MAP_HALF_Z := 93.0
-const HERO_SCENE_PATH := "res://assets/characters/ORVETHRA_NeonAlleycat_Animated_Mobile.glb"
+const HERO_SCENE_PATH := "res://assets/characters/ORVETHRA_NeonAlleycat_Animated_Mobile.glb"\nconst FountainMobile = preload("res://scripts/fountain_mobile.gd")
 var player: CharacterBody3D
 var camera: Camera3D
 var yaw := 0.0
@@ -460,6 +460,6 @@ func _process(delta: float) -> void:
     if frame_time > 0.8 and status != null:
         frame_time = 0.0
         if overview:
-            status.text = "Обзор города · стрелки — сдвиг · свайп — камера · без домов"
+            status.text = "Обзор города · фонтан в центре · пока без домов"
         else:
             status.text = "Neon Alleycat · Idle / Run / StrafeRight · свайп справа — камера"
