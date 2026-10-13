@@ -141,6 +141,7 @@ func _show_page(next: String) -> void:
                 _label(box, str(character.get("name","Герой")), 29)
                 _label(box, str(character.get("race","Человек")) + " · " + str(character.get("class","Воин")))
                 _add_button(box, "Войти в мир", func(): _enter(), true)
+                _add_button(box, "Старая тестовая улица", func(): get_tree().change_scene_to_file("res://scenes/town.tscn"))
             _add_button(box, "Создать персонажа" if character.is_empty() else "Изменить героя", func(): _show_page("create"))
             _add_button(box, "← Назад", func(): _show_page("servers"))
         "create":
@@ -198,7 +199,7 @@ func _toggle_fps() -> void:
     _show_page("settings")
 
 func _enter() -> void:
-    get_tree().change_scene_to_file("res://scenes/town.tscn")
+    get_tree().change_scene_to_file("res://scenes/city_preview.tscn")
 
 func _notice(message: String) -> void:
     var dlg := AcceptDialog.new()
