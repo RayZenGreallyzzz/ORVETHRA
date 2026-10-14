@@ -319,11 +319,25 @@ func _open_menu() -> void:
 func _open_game_settings() -> void:
     popup.visible = true
     popup_heading.text = "Настройки управления"
-    popup_description.text = "Тест поворота модели и режима движения.\nКамера — свайп справа, движение — джойстик слева."
+    _refresh_camera_setting_text()
     _clear_popup_actions()
+    _popup_button("Камера ближе", func() -> void: _adjust_camera_distance(-1))
+    _popup_button("Камера дальше", func() -> void: _adjust_camera_distance(1))
+    _popup_button("Вернуть стандартную камеру", _reset_camera_setting)
     _popup_button("Проверить ориентацию модели (180°)", _flip_hero_test)
     _popup_button("Бег / Шаг", _toggle_run)
     _popup_button("Закрыть", _close_popup)
+
+func _refresh_camera_setting_text() -> void:
+    popup_description.text = "Расстояние до героя: " + str(snappedf(game.camera_distance, 0.1)) + " м.\nСвайп справа — поворот камеры; джойстик слева — движение.\nМасштаб камеры сохраняется автоматически."
+
+func _adjust_camera_distance(direction: int) -> void:
+    game._change_camera_distance(direction)
+    _refresh_camera_setting_text()
+
+func _reset_camera_setting() -> void:
+    game._reset_camera_distance()
+    _refresh_camera_setting_text()
 
 func _flip_hero_test() -> void:
     game._toggle_facing_test()
