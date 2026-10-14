@@ -318,14 +318,16 @@ func _prepare_hero_animations() -> void:
 
 func _lowest_mesh_y(node: Node, relative_to_hero: Transform3D) -> float:
     var bottom := INF
-    if node is MeshInstance3D and node.mesh != null:
-        var box := node.mesh.get_aabb()
-        var rel := relative_to_hero * node.global_transform
-        for ix in range(2):
-            for iy in range(2):
-                for iz in range(2):
-                    var point := box.position + Vector3(box.size.x * float(ix), box.size.y * float(iy), box.size.z * float(iz))
-                    bottom = minf(bottom, (rel * point).y)
+    if node is MeshInstance3D:
+        var mesh_node: MeshInstance3D = node as MeshInstance3D
+        if mesh_node.mesh != null:
+            var box: AABB = mesh_node.mesh.get_aabb()
+            var rel: Transform3D = relative_to_hero * mesh_node.global_transform
+            for ix in range(2):
+                for iy in range(2):
+                    for iz in range(2):
+                        var point: Vector3 = box.position + Vector3(box.size.x * float(ix), box.size.y * float(iy), box.size.z * float(iz))
+                        bottom = minf(bottom, (rel * point).y)
     for child in node.get_children():
         bottom = minf(bottom, _lowest_mesh_y(child, relative_to_hero))
     return bottom
