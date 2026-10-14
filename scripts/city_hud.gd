@@ -4,7 +4,7 @@ extends CanvasLayer
 # landscape mock-up; recalculated when the Android viewport rotates.
 const JoystickControl = preload("res://scripts/city_joystick.gd")
 const MinimapControl = preload("res://scripts/city_minimap.gd")
-var game: Node3D
+var game
 var root: Control
 var joystick: Control
 var minimap: Control
