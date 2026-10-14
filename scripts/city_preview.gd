@@ -14,10 +14,12 @@ var overview := false
 var overview_height := 185.0
 var overview_center := Vector2.ZERO
 var touch_id := -1
-var held_forward := false
-var held_back := false
-var held_left := false
-var held_right := false
+var joystick_touch_id := -1
+var joystick_value := Vector2.ZERO
+var joystick_base: Control
+var joystick_knob: Control
+const JOYSTICK_RADIUS := 82.0
+const JOYSTICK_DEADZONE := 0.12
 var frame_time := 0.0
 var status: Label
 var overview_button: Button
@@ -320,12 +322,25 @@ func _player() -> void:
 
 func _input(event: InputEvent) -> void:
     if event is InputEventScreenTouch:
-        if event.pressed and event.position.x > get_viewport().get_visible_rect().size.x * 0.48:
-            touch_id = event.index
-        elif not event.pressed and event.index == touch_id:
-            touch_id = -1
-    elif event is InputEventScreenDrag and event.index == touch_id:
-        _drag_view(event.relative)
+        var viewport_size := get_viewport().get_visible_rect().size
+        if event.pressed:
+            # Left-bottom half is the movement joystick; right half remains camera look.
+            if event.position.x < viewport_size.x * 0.48 and event.position.y > viewport_size.y * 0.48 and joystick_touch_id == -1:
+                joystick_touch_id = event.index
+                _set_joystick(event.position)
+            elif event.position.x > viewport_size.x * 0.48 and touch_id == -1:
+                touch_id = event.index
+        else:
+            if event.index == joystick_touch_id:
+                joystick_touch_id = -1
+                _reset_joystick()
+            if event.index == touch_id:
+                touch_id = -1
+    elif event is InputEventScreenDrag:
+        if event.index == joystick_touch_id:
+            _set_joystick(event.position)
+        elif event.index == touch_id:
+            _drag_view(event.relative)
     elif event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
         _drag_view(event.relative)
     elif event is InputEventMouseButton and event.pressed and overview:
@@ -333,6 +348,30 @@ func _input(event: InputEvent) -> void:
             overview_height = maxf(75.0, overview_height - 18.0)
         elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
             overview_height = minf(290.0, overview_height + 18.0)
+
+func _joystick_origin() -> Vector2:
+    var viewport_size := get_viewport().get_visible_rect().size
+    return Vector2(121.0, viewport_size.y - 120.0)
+
+func _set_joystick(screen_position: Vector2) -> void:
+    var delta := screen_position - _joystick_origin()
+    if delta.length() > JOYSTICK_RADIUS:
+        delta = delta.normalized() * JOYSTICK_RADIUS
+    var raw := delta / JOYSTICK_RADIUS
+    if raw.length() < JOYSTICK_DEADZONE:
+        joystick_value = Vector2.ZERO
+    else:
+        var strength := (raw.length() - JOYSTICK_DEADZONE) / (1.0 - JOYSTICK_DEADZONE)
+        joystick_value = raw.normalized() * clampf(strength, 0.0, 1.0)
+    _update_joystick_visual()
+
+func _reset_joystick() -> void:
+    joystick_value = Vector2.ZERO
+    _update_joystick_visual()
+
+func _update_joystick_visual() -> void:
+    if joystick_knob != null:
+        joystick_knob.position = Vector2(60, 60) + joystick_value * 55.0
 
 func _drag_view(diff: Vector2) -> void:
     if overview:
@@ -343,9 +382,11 @@ func _drag_view(diff: Vector2) -> void:
         pitch = clampf(pitch + diff.y * 0.004, 0.15, 0.92)
 
 func _move_direction() -> Vector2:
-    var x := int(Input.is_action_pressed("move_right")) - int(Input.is_action_pressed("move_left")) + int(held_right) - int(held_left)
-    var z := int(Input.is_action_pressed("move_back")) - int(Input.is_action_pressed("move_forward")) + int(held_back) - int(held_forward)
-    return Vector2(float(x), float(z)).limit_length(1.0)
+    var keyboard := Vector2(
+        float(int(Input.is_action_pressed("move_right")) - int(Input.is_action_pressed("move_left"))),
+        float(int(Input.is_action_pressed("move_back")) - int(Input.is_action_pressed("move_forward")))
+    )
+    return (keyboard + joystick_value).limit_length(1.0)
 
 func _physics_process(delta: float) -> void:
     var stick := _move_direction()
@@ -420,24 +461,34 @@ func _interface() -> void:
     status.add_theme_color_override("font_color", Color("f1e2c9"))
     status.text = "Город · Neon Alleycat · Idle / Run / Strafe"
     root.add_child(status)
-    var pads := Control.new()
-    pads.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-    pads.position = Vector2(18, -197)
-    pads.size = Vector2(212, 180)
-    pads.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    root.add_child(pads)
-    var up := _make_button(pads, "▲", Vector2(72, 0), Vector2(65, 55))
-    var down := _make_button(pads, "▼", Vector2(72, 58), Vector2(65, 55))
-    var left := _make_button(pads, "◀", Vector2(0, 58), Vector2(65, 55))
-    var right := _make_button(pads, "▶", Vector2(144, 58), Vector2(65, 55))
-    up.button_down.connect(func() -> void: held_forward = true)
-    up.button_up.connect(func() -> void: held_forward = false)
-    down.button_down.connect(func() -> void: held_back = true)
-    down.button_up.connect(func() -> void: held_back = false)
-    left.button_down.connect(func() -> void: held_left = true)
-    left.button_up.connect(func() -> void: held_left = false)
-    right.button_down.connect(func() -> void: held_right = true)
-    right.button_up.connect(func() -> void: held_right = false)
+    # Mobile analogue joystick. It is visual-only here; touch tracking is handled in _input
+    # so diagonal movement stays smooth and multi-touch camera control works at the same time.
+    joystick_base = Panel.new()
+    joystick_base.name = "MovementJoystick"
+    joystick_base.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+    joystick_base.position = Vector2(26, -215)
+    joystick_base.size = Vector2(190, 190)
+    joystick_base.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var joy_style := StyleBoxFlat.new()
+    joy_style.bg_color = Color(0.06, 0.08, 0.10, 0.38)
+    joy_style.border_color = Color(0.86, 0.72, 0.46, 0.72)
+    joy_style.set_border_width_all(3)
+    joy_style.set_corner_radius_all(95)
+    joystick_base.add_theme_stylebox_override("panel", joy_style)
+    root.add_child(joystick_base)
+
+    joystick_knob = Panel.new()
+    joystick_knob.name = "Stick"
+    joystick_knob.position = Vector2(60, 60)
+    joystick_knob.size = Vector2(70, 70)
+    joystick_knob.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var knob_style := StyleBoxFlat.new()
+    knob_style.bg_color = Color(0.19, 0.31, 0.39, 0.86)
+    knob_style.border_color = Color(0.95, 0.81, 0.55, 0.95)
+    knob_style.set_border_width_all(3)
+    knob_style.set_corner_radius_all(35)
+    joystick_knob.add_theme_stylebox_override("panel", knob_style)
+    joystick_base.add_child(joystick_knob)
     var actions := Control.new()
     actions.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
     actions.position = Vector2(-325, -87)
@@ -464,4 +515,4 @@ func _process(delta: float) -> void:
         if overview:
             status.text = "Обзор города · фонтан в центре · пока без домов"
         else:
-            status.text = "Neon Alleycat · Idle / Run / StrafeRight · свайп справа — камера"
+            status.text = "Neon Alleycat · джойстик слева · свайп справа — камера"
