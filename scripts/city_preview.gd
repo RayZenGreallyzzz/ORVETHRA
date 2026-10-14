@@ -19,6 +19,12 @@ var city_hud
 var training
 var reverse_imported_facing := true
 var camera_follow := Vector3.ZERO
+# Closer default third-person view; adjustable and saved per device.
+const CAMERA_DEFAULT_DISTANCE := 5.8
+const CAMERA_MIN_DISTANCE := 4.0
+const CAMERA_MAX_DISTANCE := 11.5
+const CAMERA_STEP := 0.75
+var camera_distance := CAMERA_DEFAULT_DISTANCE
 var moving_speed := 0.0
 const CHARACTER_WALK_SPEED := 3.0
 const CHARACTER_RUN_SPEED := 5.65
@@ -75,6 +81,7 @@ void fragment() {
 
 func _ready() -> void:
     Engine.max_fps = 30
+    _load_camera_distance()
     _lighting()
     _ground()
     _layout()
@@ -379,6 +386,26 @@ func _player() -> void:
     camera.fov = 67
     add_child(camera)
 
+func _load_camera_distance() -> void:
+    var config := ConfigFile.new()
+    if config.load("user://orvethra_camera.cfg") == OK:
+        camera_distance = clampf(float(config.get_value("camera", "distance", CAMERA_DEFAULT_DISTANCE)), CAMERA_MIN_DISTANCE, CAMERA_MAX_DISTANCE)
+
+func _save_camera_distance() -> void:
+    var config := ConfigFile.new()
+    config.set_value("camera", "distance", camera_distance)
+    config.save("user://orvethra_camera.cfg")
+
+func _change_camera_distance(direction: int) -> void:
+    camera_distance = clampf(camera_distance + float(direction) * CAMERA_STEP, CAMERA_MIN_DISTANCE, CAMERA_MAX_DISTANCE)
+    _save_camera_distance()
+    _update_camera()
+
+func _reset_camera_distance() -> void:
+    camera_distance = CAMERA_DEFAULT_DISTANCE
+    _save_camera_distance()
+    _update_camera()
+
 func _input(event: InputEvent) -> void:
     if event is InputEventScreenTouch:
         if event.pressed and event.position.x > get_viewport().get_visible_rect().size.x * 0.49 and touch_id == -1:
@@ -458,7 +485,7 @@ func _update_camera() -> void:
     else:
         var focus := player.global_position + Vector3(0, 1.4, 0)
         var direction := Vector3(sin(yaw) * cos(pitch), sin(pitch), cos(yaw) * cos(pitch))
-        camera.global_position = focus + direction * 10.5
+        camera.global_position = focus + direction * camera_distance
         camera.look_at(focus, Vector3.UP)
 
 func _training_area() -> void:
