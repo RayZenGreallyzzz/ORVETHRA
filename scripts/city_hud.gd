@@ -23,6 +23,7 @@ var potion_button: Button
 var skill_five: Button
 var skill_ten: Button
 var popup: Panel
+var popup_backdrop: Control
 var popup_heading: Label
 var popup_description: Label
 var popup_actions: VBoxContainer
@@ -153,6 +154,16 @@ func _ready() -> void:
     skill_ten = _button("🔒\nLv. 10", true)
     skill_ten.pressed.connect(func() -> void: _open_notice("Навык откроется на уровне 10."))
 
+    # Transparent full-screen touch catcher behind the modal. Its only job
+    # is to close the open menu when the user taps outside the panel.
+    popup_backdrop = Control.new()
+    popup_backdrop.name = "ModalOutsideTap"
+    popup_backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+    root.add_child(popup_backdrop)
+    popup_backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    popup_backdrop.gui_input.connect(_on_popup_backdrop_input)
+    popup_backdrop.hide()
+
     popup = Panel.new()
     popup.add_theme_stylebox_override("panel", _style(Color(0.07, 0.09, 0.11, 0.96), Color("bfa574")))
     popup.visible = false
@@ -167,6 +178,9 @@ func _ready() -> void:
     popup.add_child(popup_description)
     popup_scroll = ScrollContainer.new()
     popup_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    popup_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+    popup_scroll.scroll_deadzone = 8
+    popup_scroll.mouse_filter = Control.MOUSE_FILTER_STOP
     popup.add_child(popup_scroll)
     popup_actions = VBoxContainer.new()
     popup_actions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -295,8 +309,29 @@ func show_combat_message(message: String) -> void:
     toast.text = message
     toast_time = 3.3
 
+func is_popup_open() -> bool:
+    return popup != null and popup.visible
+
+func _show_popup() -> void:
+    popup_backdrop.show()
+    popup.show()
+    popup_scroll.scroll_vertical = 0
+    # If a camera-look touch was already held, release its capture.
+    if game != null:
+        game.touch_id = -1
+
+func _on_popup_backdrop_input(event: InputEvent) -> void:
+    if event is InputEventScreenTouch:
+        if event.pressed:
+            _close_popup()
+            get_viewport().set_input_as_handled()
+    elif event is InputEventMouseButton:
+        if event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+            _close_popup()
+            get_viewport().set_input_as_handled()
+
 func _open_quest() -> void:
-    popup.visible = true
+    _show_popup()
     popup_heading.text = "Журнал заданий"
     popup_description.text = "Первые шаги: найдите фонтан (" + ("1/1" if quest_complete else "0/1") + ")\nТренировочный бой: слизни " + str(mini(training_kills, 3)) + "/3\nВиды: Lv.1 — " + str(kills_by_level[1]) + ", Lv.5 — " + str(kills_by_level[5]) + ", Lv.10 — " + str(kills_by_level[10])
     _clear_popup_actions()
@@ -304,7 +339,7 @@ func _open_quest() -> void:
     _popup_button("Закрыть", _close_popup)
 
 func _open_menu() -> void:
-    popup.visible = true
+    _show_popup()
     popup_heading.text = "ORVETHRA · Меню"
     popup_description.text = "Тестовые разделы и навигация.\nОнлайн-функции пока не подключены."
     _clear_popup_actions()
@@ -317,7 +352,7 @@ func _open_menu() -> void:
     _popup_button("Закрыть", _close_popup)
 
 func _open_game_settings() -> void:
-    popup.visible = true
+    _show_popup()
     popup_heading.text = "Настройки управления"
     _refresh_camera_setting_text()
     _clear_popup_actions()
@@ -345,14 +380,14 @@ func _flip_hero_test() -> void:
     _close_popup()
 
 func _open_notice(message: String) -> void:
-    popup.visible = true
+    _show_popup()
     popup_heading.text = "ORVETHRA"
     popup_description.text = message
     _clear_popup_actions()
     _popup_button("Закрыть", _close_popup)
 
 func _open_chat() -> void:
-    popup.visible = true
+    _show_popup()
     popup_heading.text = "Мировой чат · офлайн"
     popup_description.text = "Локальные сообщения только на этом устройстве.\n" + ("Последнее: " + chat_messages.back() if not chat_messages.is_empty() else "Напишите сообщение или используйте фразу.")
     _clear_popup_actions()
@@ -387,7 +422,8 @@ func _go_home() -> void:
     get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
 
 func _close_popup() -> void:
-    popup.visible = false
+    popup.hide()
+    popup_backdrop.hide()
 
 func _select_target() -> void:
     game._select_training_target()
