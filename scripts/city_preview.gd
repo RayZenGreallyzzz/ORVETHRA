@@ -6,6 +6,7 @@ const MAP_HALF_X := 107.0
 const MAP_HALF_Z := 93.0
 const HERO_SCENE_PATH := "res://assets/characters/ORVETHRA_NeonAlleycat_Animated_Mobile.glb"
 const FountainMobile = preload("res://scripts/fountain_mobile.gd")
+const TrainingField = preload("res://scripts/city_training.gd")
 var player: CharacterBody3D
 var camera: Camera3D
 var yaw := 0.0
@@ -15,6 +16,8 @@ var overview_height := 185.0
 var overview_center := Vector2.ZERO
 var touch_id := -1
 var city_hud
+var training
+var reverse_imported_facing := true
 var camera_follow := Vector3.ZERO
 var moving_speed := 0.0
 const CHARACTER_WALK_SPEED := 3.0
@@ -76,6 +79,7 @@ func _ready() -> void:
     _ground()
     _layout()
     FountainMobile.add_to(self)
+    _training_area()
     _player()
     _interface()
     _update_camera()
@@ -357,6 +361,9 @@ func _player() -> void:
     if hero_scene is PackedScene:
         hero_visual = hero_scene.instantiate()
         hero_visual.name = "NeonAlleycat"
+        # The baked Mixamo mesh was authored facing +Z; Godot movement faces -Z.
+        # Rotate only the visible rig by 180 degrees, never mirror the skeleton.
+        hero_visual.rotation.y = PI if reverse_imported_facing else 0.0
         hero_visual.position.y = 0.0
         player.add_child(hero_visual)
         _disable_hero_shadows(hero_visual)
@@ -454,6 +461,11 @@ func _update_camera() -> void:
         camera.global_position = focus + direction * 10.5
         camera.look_at(focus, Vector3.UP)
 
+func _training_area() -> void:
+    training = TrainingField.new()
+    training.game = self
+    add_child(training)
+
 func _interface() -> void:
     city_hud = preload("res://scripts/city_hud.gd").new()
     city_hud.game = self
@@ -464,9 +476,21 @@ func _toggle_overview() -> void:
     if overview:
         overview_center = Vector2(player.position.x, player.position.z)
 
+func _toggle_facing_test() -> void:
+    reverse_imported_facing = not reverse_imported_facing
+    if hero_visual != null:
+        hero_visual.rotation.y = PI if reverse_imported_facing else 0.0
+
+func _select_training_target() -> void:
+    if training != null and city_hud != null:
+        city_hud.show_combat_message(training.select_nearest(player.global_position))
+
+func _on_training_slime_defeated(level: int) -> void:
+    if city_hud != null:
+        city_hud.on_training_kill(level)
+
 func _try_attack() -> void:
-    # Animation-only preview: attack FBXs are not yet included in the mobile GLB.
-    var punch := _resolve_hero_animation("Punch")
-    if punch != &"" and hero_anim != null:
-        hero_anim.play(punch, 0.12)
-        hero_animation = "Punch"
+    if training == null or city_hud == null:
+        return
+    city_hud.show_combat_message(training.hit_target(player.global_position))
+    # A dedicated sword attack clip will be integrated when available.

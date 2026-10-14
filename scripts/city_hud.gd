@@ -26,6 +26,12 @@ var popup: Panel
 var popup_heading: Label
 var popup_description: Label
 var popup_actions: VBoxContainer
+var popup_scroll: ScrollContainer
+var chat_input: LineEdit
+var toast: Label
+var toast_time := 0.0
+var training_kills := 0
+var kills_by_level := {1: 0, 5: 0, 10: 0}
 var potion_count := 5
 var quest_complete := false
 var run_mode := true
@@ -103,7 +109,7 @@ func _ready() -> void:
     exp.position = Vector2(10, 88)
     stats.add_child(exp)
 
-    quest_button = _button("!  Первые шаги\nПодойдите к фонтану на площади\n(0/1)")
+    quest_button = _button("!  Первые шаги\nФонтан (0/1)  ·  Слизни (0/3)")
     quest_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
     quest_button.add_theme_color_override("font_color", Color("e6d1a1"))
     quest_button.pressed.connect(_open_quest)
@@ -159,9 +165,18 @@ func _ready() -> void:
     popup_description.position = Vector2(22, 60)
     popup_description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     popup.add_child(popup_description)
+    popup_scroll = ScrollContainer.new()
+    popup_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    popup.add_child(popup_scroll)
     popup_actions = VBoxContainer.new()
-    popup_actions.add_theme_constant_override("separation", 10)
-    popup.add_child(popup_actions)
+    popup_actions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    popup_actions.add_theme_constant_override("separation", 7)
+    popup_scroll.add_child(popup_actions)
+    toast = _label("", 17, Color("ffdf91"))
+    toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    root.add_child(toast)
+    _refresh_quest()
 
     get_viewport().size_changed.connect(_layout)
     _layout()
@@ -176,7 +191,7 @@ func _layout() -> void:
     stats.position = Vector2(inset, 51)
     stats.size = Vector2(271, 113)
     quest_button.position = Vector2(inset, 177)
-    quest_button.size = Vector2(330 if not compact else minf(330.0, screen.x * 0.61), 98)
+    quest_button.size = Vector2(305 if not compact else minf(305.0, screen.x * 0.61), 80)
     map_header.position = Vector2(screen.x - 270, 8)
     map_header.size = Vector2(217, 43)
     minimap.position = Vector2(screen.x - 208, 61)
@@ -185,28 +200,33 @@ func _layout() -> void:
     map_button.size = minimap.size
     menu_button.position = Vector2(screen.x - 55, 7)
     menu_button.size = Vector2(46, 44)
-    joystick.position = Vector2(18, screen.y - 206)
-    joystick.size = Vector2(184, 184)
+    joystick.position = Vector2(19, screen.y - 234)
+    joystick.size = Vector2(176, 176)
     chat_button.position = Vector2(16, screen.y - 48)
     chat_button.size = Vector2(minf(420.0, screen.x * 0.42), 39)
-    attack_button.position = Vector2(screen.x - 157, screen.y - 196)
-    attack_button.size = Vector2(128, 128)
-    target_button.position = Vector2(screen.x - 288, screen.y - 167)
-    target_button.size = Vector2(106, 106)
-    run_button.position = Vector2(screen.x - 205, screen.y - 76)
-    run_button.size = Vector2(65, 65)
-    potion_button.position = Vector2(screen.x - 285, screen.y - 303)
-    potion_button.size = Vector2(72, 72)
-    skill_five.position = Vector2(screen.x - 198, screen.y - 320)
-    skill_five.size = Vector2(72, 72)
-    skill_ten.position = Vector2(screen.x - 111, screen.y - 320)
-    skill_ten.size = Vector2(72, 72)
+    # Combat group deliberately ~15% smaller than the previous test APK.
+    attack_button.position = Vector2(screen.x - 146, screen.y - 180)
+    attack_button.size = Vector2(110, 110)
+    target_button.position = Vector2(screen.x - 263, screen.y - 154)
+    target_button.size = Vector2(90, 90)
+    run_button.position = Vector2(screen.x - 211, screen.y - 64)
+    run_button.size = Vector2(54, 54)
+    potion_button.position = Vector2(screen.x - 264, screen.y - 283)
+    potion_button.size = Vector2(60, 60)
+    skill_five.position = Vector2(screen.x - 189, screen.y - 299)
+    skill_five.size = Vector2(61, 61)
+    skill_ten.position = Vector2(screen.x - 115, screen.y - 299)
+    skill_ten.size = Vector2(61, 61)
     var popup_width := minf(440.0, screen.x - 36.0)
-    popup.position = Vector2((screen.x - popup_width) * 0.5, maxf(44.0, (screen.y - 360) * 0.5))
-    popup.size = Vector2(popup_width, 360)
-    popup_description.size = Vector2(popup_width - 44, 132)
-    popup_actions.position = Vector2(22, 230)
-    popup_actions.size = Vector2(popup_width - 44, 110)
+    var popup_height := minf(475.0, screen.y - 56.0)
+    popup.position = Vector2((screen.x - popup_width) * 0.5, (screen.y - popup_height) * 0.5)
+    popup.size = Vector2(popup_width, popup_height)
+    popup_description.size = Vector2(popup_width - 44, 118)
+    popup_scroll.position = Vector2(21, 192)
+    popup_scroll.size = Vector2(popup_width - 42, popup_height - 213)
+    popup_actions.custom_minimum_size.x = popup_width - 60.0
+    toast.position = Vector2(screen.x * 0.30, screen.y - 95)
+    toast.size = Vector2(screen.x * 0.4, 42)
     if compact:
         # Portrait test mode stays playable: shrink the HUD to avoid overlapping the map.
         stats.scale = Vector2(0.84, 0.84)
@@ -229,6 +249,10 @@ func _layout() -> void:
 
 func _process(delta: float) -> void:
     refresh_time += delta
+    if toast_time > 0.0:
+        toast_time -= delta
+        if toast_time <= 0.0:
+            toast.text = ""
     if attack_flash > 0.0:
         attack_flash -= delta
         if attack_flash <= 0.0:
@@ -239,8 +263,8 @@ func _process(delta: float) -> void:
     minimap.refresh(Vector2(game.player.position.x, game.player.position.z), game.player.rotation.y)
     if not quest_complete and Vector2(game.player.position.x, game.player.position.z).length() < 5.9:
         quest_complete = true
-        quest_button.text = "!  Первые шаги\nФонтан найден!\n(1/1)"
-        chat_button.text = "●  Мир  |  Задание выполнено: фонтан!"
+        _refresh_quest()
+        show_combat_message("Задание: центральный фонтан найден!")
 
 func _clear_popup_actions() -> void:
     for child in popup_actions.get_children():
@@ -255,21 +279,56 @@ func _popup_button(label: String, action: Callable) -> void:
     button.pressed.connect(action)
     popup_actions.add_child(button)
 
+func _refresh_quest() -> void:
+    var fountains := "1/1" if quest_complete else "0/1"
+    quest_button.text = "!  Первые шаги\nФонтан " + fountains + "  ·  Слизни " + str(mini(training_kills, 3)) + "/3"
+
+func on_training_kill(level: int) -> void:
+    training_kills += 1
+    kills_by_level[level] = int(kills_by_level.get(level, 0)) + 1
+    _refresh_quest()
+    show_combat_message("Победа над слизнем Lv." + str(level) + "  ·  " + str(training_kills) + " побеждено")
+    if training_kills == 3:
+        chat_button.text = "●  Мир  |  Задание: три слизня побеждены!"
+
+func show_combat_message(message: String) -> void:
+    toast.text = message
+    toast_time = 3.3
+
 func _open_quest() -> void:
     popup.visible = true
-    popup_heading.text = "Задания — Первые шаги"
-    popup_description.text = "Исследуйте стартовый город. Подойдите к центральному фонтану.\n\nПрогресс: " + ("1 / 1  — выполнено!" if quest_complete else "0 / 1")
+    popup_heading.text = "Журнал заданий"
+    popup_description.text = "Первые шаги: найдите фонтан (" + ("1/1" if quest_complete else "0/1") + ")\nТренировочный бой: слизни " + str(mini(training_kills, 3)) + "/3\nВиды: Lv.1 — " + str(kills_by_level[1]) + ", Lv.5 — " + str(kills_by_level[5]) + ", Lv.10 — " + str(kills_by_level[10])
     _clear_popup_actions()
+    _popup_button("Показать тренировочную площадку на карте", _switch_map)
     _popup_button("Закрыть", _close_popup)
 
 func _open_menu() -> void:
     popup.visible = true
     popup_heading.text = "ORVETHRA · Меню"
-    popup_description.text = "Тестовая прогулка по городу.\nВыберите действие:"
+    popup_description.text = "Тестовые разделы и навигация.\nОнлайн-функции пока не подключены."
     _clear_popup_actions()
-    _popup_button("Обзор карты / Пешком", _switch_map)
+    _popup_button("Персонаж", func() -> void: _open_notice("Путник, Lv.1\nHP 120 · MP 60\nПодробные характеристики будут позже."))
+    _popup_button("Инвентарь (тест)", func() -> void: _open_notice("Пока доступно 5 тестовых зелий.\nЭкипировка будет подключена отдельно."))
+    _popup_button("Журнал заданий", _open_quest)
+    _popup_button("Карта города / Пешком", _switch_map)
+    _popup_button("Настройки управления", _open_game_settings)
     _popup_button("Главное меню", _go_home)
     _popup_button("Закрыть", _close_popup)
+
+func _open_game_settings() -> void:
+    popup.visible = true
+    popup_heading.text = "Настройки управления"
+    popup_description.text = "Тест поворота модели и режима движения.\nКамера — свайп справа, движение — джойстик слева."
+    _clear_popup_actions()
+    _popup_button("Проверить ориентацию модели (180°)", _flip_hero_test)
+    _popup_button("Бег / Шаг", _toggle_run)
+    _popup_button("Закрыть", _close_popup)
+
+func _flip_hero_test() -> void:
+    game._toggle_facing_test()
+    show_combat_message("Ориентация модели переключена на 180°")
+    _close_popup()
 
 func _open_notice(message: String) -> void:
     popup.visible = true
@@ -280,12 +339,26 @@ func _open_notice(message: String) -> void:
 
 func _open_chat() -> void:
     popup.visible = true
-    popup_heading.text = "Мировой чат"
-    popup_description.text = "Тестовый локальный чат (онлайн пока нет).\n" + ("Последнее: " + chat_messages.back() if not chat_messages.is_empty() else "Напишите первое сообщение:")
+    popup_heading.text = "Мировой чат · офлайн"
+    popup_description.text = "Локальные сообщения только на этом устройстве.\n" + ("Последнее: " + chat_messages.back() if not chat_messages.is_empty() else "Напишите сообщение или используйте фразу.")
     _clear_popup_actions()
+    chat_input = LineEdit.new()
+    chat_input.placeholder_text = "Сообщение..."
+    chat_input.max_length = 90
+    chat_input.custom_minimum_size.y = 42
+    chat_input.virtual_keyboard_enabled = true
+    popup_actions.add_child(chat_input)
+    _popup_button("Отправить", _send_chat_input)
     _popup_button("Привет всем!", func() -> void: _send_chat("Привет всем!"))
     _popup_button("Исследую город", func() -> void: _send_chat("Исследую город"))
     _popup_button("Закрыть", _close_popup)
+
+func _send_chat_input() -> void:
+    if chat_input == null or not is_instance_valid(chat_input):
+        return
+    var message := chat_input.text.strip_edges()
+    if not message.is_empty():
+        _send_chat(message)
 
 func _send_chat(message: String) -> void:
     chat_messages.append(message)
@@ -303,7 +376,7 @@ func _close_popup() -> void:
     popup.visible = false
 
 func _select_target() -> void:
-    _open_notice("Выбор боевой цели появится с тренировочными монстрами.\nПока можно исследовать город и фонтан.")
+    game._select_training_target()
 
 func _attack() -> void:
     attack_button.text = "⚔\nУдар!"
@@ -317,8 +390,8 @@ func _toggle_run() -> void:
 
 func _use_potion() -> void:
     if potion_count < 1:
-        _open_notice("Тестовые зелья закончились.")
+        show_combat_message("Тестовые зелья закончились.")
         return
     potion_count -= 1
     potion_button.text = "✦\n" + str(potion_count)
-    _open_notice("Использовано тестовое зелье. Осталось: " + str(potion_count) + ".")
+    show_combat_message("Использовано тестовое зелье. Осталось: " + str(potion_count) + ".")
