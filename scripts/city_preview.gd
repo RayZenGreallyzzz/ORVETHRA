@@ -14,15 +14,11 @@ var overview := false
 var overview_height := 185.0
 var overview_center := Vector2.ZERO
 var touch_id := -1
-var joystick_touch_id := -1
-var joystick_value := Vector2.ZERO
-var joystick_base: Control
-var joystick_knob: Control
-const JOYSTICK_RADIUS := 82.0
-const JOYSTICK_DEADZONE := 0.12
-var frame_time := 0.0
-var status: Label
-var overview_button: Button
+var city_hud
+var camera_follow := Vector3.ZERO
+var moving_speed := 0.0
+const CHARACTER_WALK_SPEED := 3.0
+const CHARACTER_RUN_SPEED := 5.65
 var roads: Array[PackedVector2Array] = []
 var hero_visual: Node3D
 var hero_anim: AnimationPlayer
@@ -281,8 +277,58 @@ func _play_hero(wanted: String) -> void:
     var resolved := _resolve_hero_animation(wanted)
     if resolved == &"":
         return
-    hero_anim.play(resolved, 0.16)
+    hero_anim.play(resolved, 0.14)
     hero_animation = wanted
+
+func _prepare_hero_animations() -> void:
+    if hero_anim == null:
+        return
+    # Baked FBX clips are commonly ONCE animations. When Run ends after one
+    # cycle physics continues moving but the mesh freezes and 'skates'.
+    for animation_name in hero_anim.get_animation_list():
+        var animation := hero_anim.get_animation(animation_name)
+        if animation == null:
+            continue
+        animation.loop_mode = Animation.LOOP_LINEAR
+        # Leave the hip bob (Y) intact, but remove excessive baked X/Z
+        # root displacement so movement is controlled by CharacterBody3D.
+        for track in range(animation.get_track_count()):
+            if animation.track_get_type(track) != Animation.TYPE_POSITION_3D:
+                continue
+            var path := str(animation.track_get_path(track)).to_lower()
+            if not path.contains("hips") and not path.contains("root"):
+                continue
+            if animation.track_get_key_count(track) < 2:
+                continue
+            var first_value = animation.track_get_key_value(track, 0)
+            if not first_value is Vector3:
+                continue
+            var furthest := 0.0
+            for key in range(animation.track_get_key_count(track)):
+                var value = animation.track_get_key_value(track, key)
+                if value is Vector3:
+                    furthest = maxf(furthest, Vector2(value.x - first_value.x, value.z - first_value.z).length())
+            if furthest > 0.22:
+                for key in range(animation.track_get_key_count(track)):
+                    var value = animation.track_get_key_value(track, key)
+                    if value is Vector3:
+                        value.x = first_value.x
+                        value.z = first_value.z
+                        animation.track_set_key_value(track, key, value)
+
+func _lowest_mesh_y(node: Node, relative_to_hero: Transform3D) -> float:
+    var bottom := INF
+    if node is MeshInstance3D and node.mesh != null:
+        var box := node.mesh.get_aabb()
+        var rel := relative_to_hero * node.global_transform
+        for ix in range(2):
+            for iy in range(2):
+                for iz in range(2):
+                    var point := box.position + Vector3(box.size.x * float(ix), box.size.y * float(iy), box.size.z * float(iz))
+                    bottom = minf(bottom, (rel * point).y)
+    for child in node.get_children():
+        bottom = minf(bottom, _lowest_mesh_y(child, relative_to_hero))
+    return bottom
 
 func _disable_hero_shadows(node: Node) -> void:
     if node is GeometryInstance3D:
@@ -294,6 +340,7 @@ func _player() -> void:
     player = CharacterBody3D.new()
     player.name = "CityExplorer"
     player.position = Vector3(0, 0.12, 11)
+    player.floor_snap_length = 0.35
     add_child(player)
 
     var collision := CollisionShape3D.new()
@@ -308,11 +355,14 @@ func _player() -> void:
     if hero_scene is PackedScene:
         hero_visual = hero_scene.instantiate()
         hero_visual.name = "NeonAlleycat"
-        # The converted FBX mesh is centred vertically; lift its feet to street level.
-        hero_visual.position.y = 0.95
+        hero_visual.position.y = 0.0
         player.add_child(hero_visual)
         _disable_hero_shadows(hero_visual)
+        var lowest := _lowest_mesh_y(hero_visual, hero_visual.global_transform.affine_inverse())
+        # Align the actual mesh bounding box instead of assuming 0.95m.
+        hero_visual.position.y = (-lowest + 0.055) if lowest != INF else 0.95
         hero_anim = _find_animation_player(hero_visual)
+        _prepare_hero_animations()
         _play_hero("Idle")
 
     camera = Camera3D.new()
@@ -322,25 +372,12 @@ func _player() -> void:
 
 func _input(event: InputEvent) -> void:
     if event is InputEventScreenTouch:
-        var viewport_size := get_viewport().get_visible_rect().size
-        if event.pressed:
-            # Left-bottom half is the movement joystick; right half remains camera look.
-            if event.position.x < viewport_size.x * 0.48 and event.position.y > viewport_size.y * 0.48 and joystick_touch_id == -1:
-                joystick_touch_id = event.index
-                _set_joystick(event.position)
-            elif event.position.x > viewport_size.x * 0.48 and touch_id == -1:
-                touch_id = event.index
-        else:
-            if event.index == joystick_touch_id:
-                joystick_touch_id = -1
-                _reset_joystick()
-            if event.index == touch_id:
-                touch_id = -1
-    elif event is InputEventScreenDrag:
-        if event.index == joystick_touch_id:
-            _set_joystick(event.position)
-        elif event.index == touch_id:
-            _drag_view(event.relative)
+        if event.pressed and event.position.x > get_viewport().get_visible_rect().size.x * 0.49 and touch_id == -1:
+            touch_id = event.index
+        elif not event.pressed and event.index == touch_id:
+            touch_id = -1
+    elif event is InputEventScreenDrag and event.index == touch_id:
+        _drag_view(event.relative)
     elif event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
         _drag_view(event.relative)
     elif event is InputEventMouseButton and event.pressed and overview:
@@ -348,30 +385,6 @@ func _input(event: InputEvent) -> void:
             overview_height = maxf(75.0, overview_height - 18.0)
         elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
             overview_height = minf(290.0, overview_height + 18.0)
-
-func _joystick_origin() -> Vector2:
-    var viewport_size := get_viewport().get_visible_rect().size
-    return Vector2(121.0, viewport_size.y - 120.0)
-
-func _set_joystick(screen_position: Vector2) -> void:
-    var delta := screen_position - _joystick_origin()
-    if delta.length() > JOYSTICK_RADIUS:
-        delta = delta.normalized() * JOYSTICK_RADIUS
-    var raw := delta / JOYSTICK_RADIUS
-    if raw.length() < JOYSTICK_DEADZONE:
-        joystick_value = Vector2.ZERO
-    else:
-        var strength := (raw.length() - JOYSTICK_DEADZONE) / (1.0 - JOYSTICK_DEADZONE)
-        joystick_value = raw.normalized() * clampf(strength, 0.0, 1.0)
-    _update_joystick_visual()
-
-func _reset_joystick() -> void:
-    joystick_value = Vector2.ZERO
-    _update_joystick_visual()
-
-func _update_joystick_visual() -> void:
-    if joystick_knob != null:
-        joystick_knob.position = Vector2(60, 60) + joystick_value * 55.0
 
 func _drag_view(diff: Vector2) -> void:
     if overview:
@@ -386,7 +399,10 @@ func _move_direction() -> Vector2:
         float(int(Input.is_action_pressed("move_right")) - int(Input.is_action_pressed("move_left"))),
         float(int(Input.is_action_pressed("move_back")) - int(Input.is_action_pressed("move_forward")))
     )
-    return (keyboard + joystick_value).limit_length(1.0)
+    var analog := Vector2.ZERO
+    if city_hud != null and city_hud.joystick != null:
+        analog = city_hud.joystick.value
+    return (keyboard + analog).limit_length(1.0)
 
 func _physics_process(delta: float) -> void:
     var stick := _move_direction()
@@ -397,26 +413,30 @@ func _physics_process(delta: float) -> void:
         player.velocity = Vector3.ZERO
         _play_hero("Idle")
     else:
-        var forward := Vector3(-sin(yaw), 0, -cos(yaw))
-        var right := Vector3(cos(yaw), 0, -sin(yaw))
-        var direction := right * stick.x - forward * stick.y
-        player.velocity.x = direction.x * 6.0
-        player.velocity.z = direction.z * 6.0
-
-        if direction.length_squared() > 0.01:
-            # The supplied FBX set contains Idle, Run and StrafeRight.
-            # Right strafe keeps the body facing forward; normal travel turns into movement.
-            if stick.x > 0.35 and absf(stick.x) > absf(stick.y):
-                player.rotation.y = yaw
-                _play_hero("StrafeRight")
-            else:
-                player.rotation.y = atan2(-direction.x, -direction.z)
-                _play_hero("Run")
+        var forward := Vector3(-sin(yaw), 0.0, -cos(yaw))
+        var right := Vector3(cos(yaw), 0.0, -sin(yaw))
+        var direction := (right * stick.x - forward * stick.y).limit_length(1.0)
+        var pace := CHARACTER_RUN_SPEED if city_hud == null or city_hud.run_mode else CHARACTER_WALK_SPEED
+        var wanted := direction * pace
+        var acceleration := 27.0 if stick.length() > 0.11 else 46.0
+        player.velocity.x = move_toward(player.velocity.x, wanted.x, acceleration * delta)
+        player.velocity.z = move_toward(player.velocity.z, wanted.z, acceleration * delta)
+        moving_speed = Vector2(player.velocity.x, player.velocity.z).length()
+        if stick.length() > 0.11:
+            var desired_yaw := atan2(-direction.x, -direction.z)
+            player.rotation.y = lerp_angle(player.rotation.y, desired_yaw, minf(1.0, 15.0 * delta))
+            _play_hero("Run")
+            if hero_anim != null:
+                hero_anim.speed_scale = clampf(moving_speed / 4.8, 0.70, 1.25)
         else:
             _play_hero("Idle")
+            if hero_anim != null:
+                hero_anim.speed_scale = 1.0
 
         if not player.is_on_floor():
             player.velocity.y -= 20.0 * delta
+        else:
+            player.velocity.y = -0.3
         player.move_and_slide()
         player.position.x = clampf(player.position.x, -MAP_HALF_X, MAP_HALF_X)
         player.position.z = clampf(player.position.z, -MAP_HALF_Z, MAP_HALF_Z)
@@ -432,87 +452,19 @@ func _update_camera() -> void:
         camera.global_position = focus + direction * 10.5
         camera.look_at(focus, Vector3.UP)
 
-func _make_button(parent: Control, caption: String, pos: Vector2, dims: Vector2) -> Button:
-    var b := Button.new()
-    b.text = caption
-    b.position = pos
-    b.size = dims
-    b.focus_mode = Control.FOCUS_NONE
-    b.add_theme_font_size_override("font_size", 20)
-    parent.add_child(b)
-    return b
-
 func _interface() -> void:
-    var layer := CanvasLayer.new()
-    add_child(layer)
-    var root := Control.new()
-    root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    layer.add_child(root)
-    var title := Label.new()
-    title.text = "ORVETHRA  ·  Старый город"
-    title.position = Vector2(15, 11)
-    title.add_theme_color_override("font_color", Color("f6e5c1"))
-    title.add_theme_font_size_override("font_size", 23)
-    root.add_child(title)
-    status = Label.new()
-    status.position = Vector2(15, 48)
-    status.add_theme_font_size_override("font_size", 15)
-    status.add_theme_color_override("font_color", Color("f1e2c9"))
-    status.text = "Город · Neon Alleycat · Idle / Run / Strafe"
-    root.add_child(status)
-    # Mobile analogue joystick. It is visual-only here; touch tracking is handled in _input
-    # so diagonal movement stays smooth and multi-touch camera control works at the same time.
-    joystick_base = Panel.new()
-    joystick_base.name = "MovementJoystick"
-    joystick_base.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-    joystick_base.position = Vector2(26, -215)
-    joystick_base.size = Vector2(190, 190)
-    joystick_base.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    var joy_style := StyleBoxFlat.new()
-    joy_style.bg_color = Color(0.06, 0.08, 0.10, 0.38)
-    joy_style.border_color = Color(0.86, 0.72, 0.46, 0.72)
-    joy_style.set_border_width_all(3)
-    joy_style.set_corner_radius_all(95)
-    joystick_base.add_theme_stylebox_override("panel", joy_style)
-    root.add_child(joystick_base)
-
-    joystick_knob = Panel.new()
-    joystick_knob.name = "Stick"
-    joystick_knob.position = Vector2(60, 60)
-    joystick_knob.size = Vector2(70, 70)
-    joystick_knob.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    var knob_style := StyleBoxFlat.new()
-    knob_style.bg_color = Color(0.19, 0.31, 0.39, 0.86)
-    knob_style.border_color = Color(0.95, 0.81, 0.55, 0.95)
-    knob_style.set_border_width_all(3)
-    knob_style.set_corner_radius_all(35)
-    joystick_knob.add_theme_stylebox_override("panel", knob_style)
-    joystick_base.add_child(joystick_knob)
-    var actions := Control.new()
-    actions.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-    actions.position = Vector2(-325, -87)
-    actions.size = Vector2(315, 77)
-    actions.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    root.add_child(actions)
-    overview_button = _make_button(actions, "Обзор сверху", Vector2(0, 0), Vector2(155, 63))
-    overview_button.pressed.connect(_toggle_overview)
-    var back := _make_button(actions, "Меню", Vector2(162, 0), Vector2(146, 63))
-    back.pressed.connect(func() -> void: get_tree().change_scene_to_file("res://scenes/main_menu.tscn"))
-    var zoom := _make_button(root, "−  /  +", Vector2(16, 93), Vector2(96, 43))
-    zoom.pressed.connect(func() -> void: overview_height = 150.0 if overview_height > 160.0 else 235.0)
+    city_hud = preload("res://scripts/city_hud.gd").new()
+    city_hud.game = self
+    add_child(city_hud)
 
 func _toggle_overview() -> void:
     overview = not overview
     if overview:
-        overview_center = Vector2.ZERO
-    overview_button.text = "Пешком" if overview else "Обзор сверху"
+        overview_center = Vector2(player.position.x, player.position.z)
 
-func _process(delta: float) -> void:
-    frame_time += delta
-    if frame_time > 0.8 and status != null:
-        frame_time = 0.0
-        if overview:
-            status.text = "Обзор города · фонтан в центре · пока без домов"
-        else:
-            status.text = "Neon Alleycat · джойстик слева · свайп справа — камера"
+func _try_attack() -> void:
+    # Animation-only preview: attack FBXs are not yet included in the mobile GLB.
+    var punch := _resolve_hero_animation("Punch")
+    if punch != &"" and hero_anim != null:
+        hero_anim.play(punch, 0.12)
+        hero_animation = "Punch"
