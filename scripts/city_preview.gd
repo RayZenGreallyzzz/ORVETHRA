@@ -22,7 +22,7 @@ var camera_follow := Vector3.ZERO
 # Closer default third-person view; adjustable and saved per device.
 const CAMERA_DEFAULT_DISTANCE := 5.8
 const CAMERA_MIN_DISTANCE := 4.0
-const CAMERA_MAX_DISTANCE := 11.5
+const CAMERA_MAX_DISTANCE := 15.0
 const CAMERA_STEP := 0.75
 var camera_distance := CAMERA_DEFAULT_DISTANCE
 var moving_speed := 0.0
@@ -407,6 +407,11 @@ func _reset_camera_distance() -> void:
     _update_camera()
 
 func _input(event: InputEvent) -> void:
+    # Godot dispatches _input before GUI controls. Never use a menu swipe
+    # to rotate the third-person camera, even on emulated touch/mouse input.
+    if city_hud != null and city_hud.is_popup_open():
+        touch_id = -1
+        return
     if event is InputEventScreenTouch:
         if event.pressed and event.position.x > get_viewport().get_visible_rect().size.x * 0.49 and touch_id == -1:
             touch_id = event.index
@@ -431,6 +436,9 @@ func _drag_view(diff: Vector2) -> void:
         pitch = clampf(pitch + diff.y * 0.004, 0.15, 0.92)
 
 func _move_direction() -> Vector2:
+    # Opening a modal menu also releases movement from the on-screen joystick.
+    if city_hud != null and city_hud.is_popup_open():
+        return Vector2.ZERO
     var keyboard := Vector2(
         float(int(Input.is_action_pressed("move_right")) - int(Input.is_action_pressed("move_left"))),
         float(int(Input.is_action_pressed("move_back")) - int(Input.is_action_pressed("move_forward")))
