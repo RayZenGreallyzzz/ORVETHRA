@@ -81,6 +81,7 @@ func _touch_area(x1: float, y1: float, x2: float, y2: float, callback: Callable)
     content.add_child(button)
 
 func _show_page(next: String) -> void:
+    _close_character_keyboard()
     page = next
     for child in content.get_children():
         content.remove_child(child)
@@ -150,6 +151,18 @@ func _show_page(next: String) -> void:
             char_name.placeholder_text = "Имя персонажа"
             char_name.text = str(character.get("name", ""))
             char_name.custom_minimum_size.y = 47
+            char_name.max_length = 18
+            char_name.virtual_keyboard_enabled = true
+            char_name.focus_entered.connect(func() -> void: call_deferred("_open_character_keyboard"))
+            char_name.gui_input.connect(func(event: InputEvent) -> void:
+                if event is InputEventScreenTouch and event.pressed:
+                    char_name.grab_focus()
+                    call_deferred("_open_character_keyboard")
+            )
+            char_name.text_submitted.connect(func(_value: String) -> void:
+                _close_character_keyboard()
+                char_name.release_focus()
+            )
             box.add_child(char_name)
             char_race = OptionButton.new()
             for s in ["Человек", "Эльф", "Гном"]:
@@ -173,7 +186,26 @@ func _show_page(next: String) -> void:
             _label(box, "ORVETHRA — Мир забытых легенд\nНезависимая фэнтези-RPG\nВерсия меню 0.5 · ранний прототип")
             _add_button(box, "← Назад", func(): _show_page("home"))
 
+func _open_character_keyboard() -> void:
+    if char_name == null or not is_instance_valid(char_name):
+        return
+    char_name.grab_focus()
+    var rect := char_name.get_global_rect()
+    var cursor := char_name.caret_column
+    DisplayServer.virtual_keyboard_show(
+        char_name.text,
+        rect,
+        DisplayServer.KEYBOARD_TYPE_DEFAULT,
+        18,
+        cursor,
+        cursor
+    )
+
+func _close_character_keyboard() -> void:
+    DisplayServer.virtual_keyboard_hide()
+
 func _save_character() -> void:
+    _close_character_keyboard()
     var nm := char_name.text.strip_edges()
     if nm.length() < 2 or nm.length() > 18:
         _notice("Имя должно содержать от 2 до 18 символов.")
