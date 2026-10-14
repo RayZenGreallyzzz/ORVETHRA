@@ -2,6 +2,12 @@ extends Control
 
 # ORVETHRA v0.5: menus are functional; Google login and online servers are placeholders.
 const SAVE_PATH := "user://orvethra_guest.json"
+const PREFERENCES_PATH := "user://orvethra_preferences.json"
+var auto_rotation := false
+var keyboard_overlay: ColorRect
+var keyboard_grid: GridContainer
+var keyboard_preview: Label
+var keyboard_russian := true
 var page := "home"
 var character: Dictionary = {}
 var char_name: LineEdit
@@ -14,6 +20,8 @@ var content: Control
 func _ready() -> void:
     Engine.max_fps = 30
     _load_character()
+    _load_preferences()
+    get_viewport().size_changed.connect(_on_viewport_size_changed)
     var base := ColorRect.new()
     base.color = Color("192532")
     base.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -87,8 +95,9 @@ func _show_page(next: String) -> void:
         content.remove_child(child)
         child.queue_free()
     if page == "home":
-        if background != null:
-            # Hotspots follow the buttons baked into the approved cover artwork.
+        if background != null and get_viewport_rect().size.x >= get_viewport_rect().size.y:
+            # The approved cover has baked buttons for landscape. In portrait we
+            # fall back to real controls because cropping moves those hotspots.
             _touch_area(0.43, 0.63, 0.68, 0.73, func(): _show_page("login"))
             _touch_area(0.475, 0.735, 0.635, 0.793, func(): _show_page("settings"))
             _touch_area(0.475, 0.793, 0.635, 0.853, func(): _show_page("authors"))
@@ -138,6 +147,7 @@ func _show_page(next: String) -> void:
             _label(box, "Выбор персонажа", 31)
             if character.is_empty():
                 _label(box, "Персонажей пока нет.")
+                _add_button(box, "Быстрый вход в город (тест)", func(): _quick_enter(), true)
             else:
                 _label(box, str(character.get("name","Герой")), 29)
                 _label(box, str(character.get("race","Человек")) + " · " + str(character.get("class","Воин")))
@@ -153,6 +163,7 @@ func _show_page(next: String) -> void:
             char_name.custom_minimum_size.y = 47
             char_name.max_length = 18
             char_name.virtual_keyboard_enabled = true
+            char_name.focus_mode = Control.FOCUS_ALL
             char_name.focus_entered.connect(func() -> void: call_deferred("_open_character_keyboard"))
             char_name.gui_input.connect(func(event: InputEvent) -> void:
                 if event is InputEventScreenTouch and event.pressed:
@@ -164,6 +175,13 @@ func _show_page(next: String) -> void:
                 char_name.release_focus()
             )
             box.add_child(char_name)
+            var keyboard_actions := HBoxContainer.new()
+            keyboard_actions.add_theme_constant_override("separation", 10)
+            box.add_child(keyboard_actions)
+            var android_button := _add_button(keyboard_actions, "⌨ Android", func(): call_deferred("_open_character_keyboard"))
+            android_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+            var game_keyboard_button := _add_button(keyboard_actions, "Клавиатура в игре", func(): _show_game_keyboard())
+            game_keyboard_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
             char_race = OptionButton.new()
             for s in ["Человек", "Эльф", "Гном"]:
                 char_race.add_item(s)
@@ -180,6 +198,8 @@ func _show_page(next: String) -> void:
             _label(box, "Настройки", 31)
             _label(box, "Для IT-801C рекомендован экономный режим.")
             _add_button(box, "Лимит: " + ("60 FPS" if quality_high else "30 FPS"), func(): _toggle_fps(), true)
+            _add_button(box, "Экран: " + ("Автоповорот" if auto_rotation else "Горизонтально"), func(): _toggle_orientation())
+            _label(box, "Авто: портретный и горизонтальный режимы.\nГоризонтально: экран закреплён.", 15)
             _add_button(box, "← Назад", func(): _show_page("home"))
         "authors":
             _label(box, "Авторы", 31)
@@ -190,19 +210,155 @@ func _open_character_keyboard() -> void:
     if char_name == null or not is_instance_valid(char_name):
         return
     char_name.grab_focus()
-    var rect := char_name.get_global_rect()
-    var cursor := char_name.caret_column
-    DisplayServer.virtual_keyboard_show(
-        char_name.text,
-        rect,
-        DisplayServer.KEYBOARD_TYPE_DEFAULT,
-        18,
-        cursor,
-        cursor
-    )
+    if DisplayServer.has_feature(DisplayServer.FEATURE_VIRTUAL_KEYBOARD):
+        var rect := char_name.get_global_rect()
+        var cursor := char_name.caret_column
+        DisplayServer.virtual_keyboard_show(
+            char_name.text,
+            rect,
+            DisplayServer.KEYBOARD_TYPE_DEFAULT,
+            char_name.max_length,
+            cursor,
+            cursor
+        )
 
 func _close_character_keyboard() -> void:
-    DisplayServer.virtual_keyboard_hide()
+    if DisplayServer.has_feature(DisplayServer.FEATURE_VIRTUAL_KEYBOARD):
+        DisplayServer.virtual_keyboard_hide()
+    _close_game_keyboard()
+
+func _show_game_keyboard() -> void:
+    if char_name == null or not is_instance_valid(char_name):
+        return
+    _close_character_keyboard()
+    keyboard_russian = true
+    keyboard_overlay = ColorRect.new()
+    keyboard_overlay.name = "InGameNameKeyboard"
+    keyboard_overlay.color = Color(0.0, 0.0, 0.0, 0.84)
+    keyboard_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+    keyboard_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    content.add_child(keyboard_overlay)
+
+    var keyboard_panel := PanelContainer.new()
+    keyboard_panel.anchor_left = 0.5
+    keyboard_panel.anchor_top = 0.5
+    keyboard_panel.anchor_right = 0.5
+    keyboard_panel.anchor_bottom = 0.5
+    var panel_half_width := minf(475.0, get_viewport_rect().size.x * 0.47)
+    keyboard_panel.offset_left = -panel_half_width
+    keyboard_panel.offset_right = panel_half_width
+    keyboard_panel.offset_top = -205
+    keyboard_panel.offset_bottom = 205
+    keyboard_panel.add_theme_stylebox_override("panel", _style(Color("18283a"), Color("bca06b")))
+    keyboard_overlay.add_child(keyboard_panel)
+
+    var margin := MarginContainer.new()
+    for side in ["left", "right", "top", "bottom"]:
+        margin.add_theme_constant_override("margin_" + side, 10)
+    keyboard_panel.add_child(margin)
+    var column := VBoxContainer.new()
+    column.add_theme_constant_override("separation", 5)
+    margin.add_child(column)
+    keyboard_preview = Label.new()
+    keyboard_preview.text = "Имя: " + char_name.text
+    keyboard_preview.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    keyboard_preview.add_theme_font_size_override("font_size", 20)
+    column.add_child(keyboard_preview)
+
+    keyboard_grid = GridContainer.new()
+    keyboard_grid.columns = 11
+    keyboard_grid.add_theme_constant_override("h_separation", 3)
+    keyboard_grid.add_theme_constant_override("v_separation", 3)
+    column.add_child(keyboard_grid)
+    _fill_game_keyboard()
+
+    var controls := HBoxContainer.new()
+    controls.add_theme_constant_override("separation", 5)
+    column.add_child(controls)
+    for pair in [["АБВ / ABC", "_toggle_keyboard_language"], ["Пробел", "_keyboard_space"], ["⌫", "_keyboard_backspace"], ["Готово", "_close_game_keyboard"]]:
+        var key := _add_button(controls, pair[0], Callable(self, pair[1]))
+        key.custom_minimum_size = Vector2(0, 48)
+        key.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+func _fill_game_keyboard() -> void:
+    if keyboard_grid == null or not is_instance_valid(keyboard_grid):
+        return
+    for child in keyboard_grid.get_children():
+        keyboard_grid.remove_child(child)
+        child.queue_free()
+    var letters := "ЙЦУКЕНГШЩЗХФЫВАПРОЛДЖЭЯЧСМИТЬБЮЁ0123456789" if keyboard_russian else "QWERTYUIOPASDFGHJKLZXCVBNM0123456789"
+    for i in range(letters.length()):
+        var symbol := letters.substr(i, 1)
+        var key := _add_button(keyboard_grid, symbol, Callable(self, "_insert_keyboard_symbol").bind(symbol))
+        key.custom_minimum_size = Vector2(41, 42)
+        key.add_theme_font_size_override("font_size", 17)
+
+func _insert_keyboard_symbol(symbol: String) -> void:
+    if char_name == null or not is_instance_valid(char_name):
+        return
+    if char_name.text.length() >= char_name.max_length:
+        return
+    char_name.text += symbol
+    _update_keyboard_preview()
+
+func _keyboard_space() -> void:
+    _insert_keyboard_symbol(" ")
+
+func _keyboard_backspace() -> void:
+    if char_name == null or not is_instance_valid(char_name):
+        return
+    if not char_name.text.is_empty():
+        char_name.text = char_name.text.substr(0, char_name.text.length() - 1)
+        _update_keyboard_preview()
+
+func _toggle_keyboard_language() -> void:
+    keyboard_russian = not keyboard_russian
+    _fill_game_keyboard()
+
+func _update_keyboard_preview() -> void:
+    if keyboard_preview != null and is_instance_valid(keyboard_preview):
+        keyboard_preview.text = "Имя: " + char_name.text
+
+func _close_game_keyboard() -> void:
+    if keyboard_overlay != null and is_instance_valid(keyboard_overlay):
+        keyboard_overlay.queue_free()
+    keyboard_overlay = null
+    keyboard_grid = null
+    keyboard_preview = null
+
+func _quick_enter() -> void:
+    character = {"name": "Путник", "race": "Человек", "class": "Воин"}
+    var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+    if file != null:
+        file.store_string(JSON.stringify(character))
+        file.close()
+    _enter()
+
+func _on_viewport_size_changed() -> void:
+    if page == "home":
+        call_deferred("_show_page", "home")
+
+func _load_preferences() -> void:
+    if FileAccess.file_exists(PREFERENCES_PATH):
+        var value: Variant = JSON.parse_string(FileAccess.get_file_as_string(PREFERENCES_PATH))
+        if value is Dictionary:
+            auto_rotation = bool(value.get("auto_rotation", false))
+    _apply_orientation()
+
+func _toggle_orientation() -> void:
+    auto_rotation = not auto_rotation
+    var file := FileAccess.open(PREFERENCES_PATH, FileAccess.WRITE)
+    if file != null:
+        file.store_string(JSON.stringify({"auto_rotation": auto_rotation}))
+        file.close()
+    _apply_orientation()
+    _show_page("settings")
+
+func _apply_orientation() -> void:
+    if DisplayServer.has_feature(DisplayServer.FEATURE_ORIENTATION):
+        DisplayServer.screen_set_orientation(
+            DisplayServer.SCREEN_SENSOR if auto_rotation else DisplayServer.SCREEN_LANDSCAPE
+        )
 
 func _save_character() -> void:
     _close_character_keyboard()
@@ -231,6 +387,7 @@ func _toggle_fps() -> void:
     _show_page("settings")
 
 func _enter() -> void:
+    _close_character_keyboard()
     get_tree().change_scene_to_file("res://scenes/city_preview.tscn")
 
 func _notice(message: String) -> void:

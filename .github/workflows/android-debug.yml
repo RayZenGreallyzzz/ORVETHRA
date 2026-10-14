@@ -1,4 +1,4 @@
-name: ORVETHRA City Fountain Android v0.9
+name: ORVETHRA Android Login Keyboard & Screen Rotation v0.11
 
 on:
   push:
@@ -82,6 +82,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ORVETHRA-City-Fountain-v09-Android
+          name: ORVETHRA-Keyboard-Rotation-v011-Android
           path: build/ORVETHRA-IT801C-debug.apk
           retention-days: 14
