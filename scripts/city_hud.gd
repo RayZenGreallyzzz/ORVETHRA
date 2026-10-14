@@ -6,8 +6,8 @@ const JoystickControl = preload("res://scripts/city_joystick.gd")
 const MinimapControl = preload("res://scripts/city_minimap.gd")
 var game
 var root: Control
-var joystick: Control
-var minimap: Control
+var joystick
+var minimap
 var title: Label
 var stats: Panel
 var quest_button: Button
