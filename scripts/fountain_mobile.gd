@@ -1,12 +1,13 @@
 extends RefCounted
 
 # ORVETHRA mobile plaza fountain.
-# Geometry is a heavily decimated proxy generated from the user's Guardian Angel Fountain GLB.
-# Its corrected stone/gold/blue colour is baked into vertex colours to keep Android memory low.
+# Mobile proxy generated from the user's Guardian Angel Fountain GLB.
+# v2 keeps about 49k triangles (instead of ~8k) so the wings, basin and ornament
+# keep their shape while remaining far lighter than the ~550k-triangle source.
+# Corrected stone/gold/blue colour is baked into vertex colours.
 const DATA_PATH := "res://assets/fountain/guardian_fountain_mobile.bin"
-const RAW_SIZE := 55320
-const MIN_POS := Vector3(-0.9293902516365051, -0.8981766700744629, -0.9286659359931946)
-const MAX_POS := Vector3(0.9154068231582642, 0.8576012849807739, 0.9087084531784058)
+const MIN_POS := Vector3(-0.9148550033569336, -0.887890487909317, -0.9113331246376037)
+const MAX_POS := Vector3(0.922199010848999, 0.8816908001899719, 0.9049930387529833)
 const FOUNTAIN_SCALE := 4.0
 
 static func _signed_byte(value: int) -> float:
@@ -19,11 +20,11 @@ static func add_to(parent: Node3D) -> Node3D:
         push_error("ORVETHRA fountain data is missing")
         return null
 
-    var raw := packed.decompress(RAW_SIZE, FileAccess.COMPRESSION_DEFLATE)
-    if raw.size() != RAW_SIZE:
-        push_error("ORVETHRA fountain data failed to decompress")
+    var raw := packed
+    if raw.size() < 12:
+        push_error("ORVETHRA fountain data is truncated")
         return null
-    if raw.slice(0, 4).get_string_from_ascii() != "OFM1":
+    if raw.slice(0, 4).get_string_from_ascii() != "OFM2":
         push_error("ORVETHRA fountain data has invalid header")
         return null
 
