@@ -3,6 +3,7 @@ extends Control
 # ORVETHRA v0.5: menus are functional; Google login and online servers are placeholders.
 const SAVE_PATH := "user://orvethra_guest.json"
 const PREFERENCES_PATH := "user://orvethra_preferences.json"
+const CharacterRoster = preload("res://scripts/character_roster.gd")
 var auto_rotation := false
 var keyboard_overlay: ColorRect
 var keyboard_grid: GridContainer
@@ -16,6 +17,10 @@ var char_class: OptionButton
 var quality_high := false
 var background: TextureRect
 var content: Control
+var selected_roster_id := ""
+var roster_preview_root: Node3D
+var roster_viewport: SubViewport
+var roster_selected_label: Label
 
 func _ready() -> void:
     Engine.max_fps = 30
@@ -90,6 +95,9 @@ func _touch_area(x1: float, y1: float, x2: float, y2: float, callback: Callable)
 
 func _show_page(next: String) -> void:
     _close_character_keyboard()
+    roster_viewport = null
+    roster_preview_root = null
+    roster_selected_label = null
     page = next
     for child in content.get_children():
         content.remove_child(child)
@@ -110,10 +118,19 @@ func _show_page(next: String) -> void:
         content.add_child(veil)
     var panel := PanelContainer.new()
     panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-    panel.offset_left = -285
-    panel.offset_top = -255
-    panel.offset_right = 285
-    panel.offset_bottom = 255
+    var viewport := get_viewport_rect().size
+    if page == "characters":
+        var panel_half_w := minf(570.0, viewport.x * 0.475)
+        var panel_half_h := minf(330.0, viewport.y * 0.465)
+        panel.offset_left = -panel_half_w
+        panel.offset_top = -panel_half_h
+        panel.offset_right = panel_half_w
+        panel.offset_bottom = panel_half_h
+    else:
+        panel.offset_left = -285
+        panel.offset_top = -255
+        panel.offset_right = 285
+        panel.offset_bottom = 255
     panel.add_theme_stylebox_override("panel", _style(Color("18283a"), Color("bca06b")))
     content.add_child(panel)
     var margin := MarginContainer.new()
@@ -144,17 +161,7 @@ func _show_page(next: String) -> void:
             _add_button(box, "Локальный мир · офлайн", func(): _show_page("characters"), true)
             _add_button(box, "← Назад", func(): _show_page("login"))
         "characters":
-            _label(box, "Выбор персонажа", 31)
-            if character.is_empty():
-                _label(box, "Персонажей пока нет.")
-                _add_button(box, "Быстрый вход в город (тест)", func(): _quick_enter(), true)
-            else:
-                _label(box, str(character.get("name","Герой")), 29)
-                _label(box, str(character.get("race","Человек")) + " · " + str(character.get("class","Воин")))
-                _add_button(box, "Войти в мир", func(): _enter(), true)
-                _add_button(box, "Старая тестовая улица", func(): get_tree().change_scene_to_file("res://scenes/town.tscn"))
-            _add_button(box, "Создать персонажа" if character.is_empty() else "Изменить героя", func(): _show_page("create"))
-            _add_button(box, "← Назад", func(): _show_page("servers"))
+            _show_roster(box)
         "create":
             _label(box, "Создание героя", 29)
             char_name = LineEdit.new()
@@ -205,6 +212,176 @@ func _show_page(next: String) -> void:
             _label(box, "Авторы", 31)
             _label(box, "ORVETHRA — Мир забытых легенд\nНезависимая фэнтези-RPG\nВерсия меню 0.5 · ранний прототип")
             _add_button(box, "← Назад", func(): _show_page("home"))
+
+func _show_roster(box: VBoxContainer) -> void:
+    _label(box, "Герои ORVETHRA · тестовый выбор", 29)
+    var body := HBoxContainer.new()
+    body.add_theme_constant_override("separation", 16)
+    body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    box.add_child(body)
+
+    var scroll := ScrollContainer.new()
+    scroll.custom_minimum_size.x = minf(380.0, get_viewport_rect().size.x * 0.35)
+    scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    body.add_child(scroll)
+    var list := VBoxContainer.new()
+    list.add_theme_constant_override("separation", 6)
+    list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    scroll.add_child(list)
+
+    for entry in CharacterRoster.ENTRIES:
+        var label := str(entry["title"]) + "  ·  " + str(entry["species"])
+        var button := _add_button(list, label, Callable(self, "_select_roster").bind(str(entry["id"])))
+        button.custom_minimum_size.y = 44
+        button.add_theme_font_size_override("font_size", 16)
+
+    var preview_column := VBoxContainer.new()
+    preview_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    preview_column.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    body.add_child(preview_column)
+    var preview_frame := SubViewportContainer.new()
+    preview_frame.stretch = true
+    preview_frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    preview_frame.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    preview_frame.custom_minimum_size = Vector2(240, 245)
+    preview_column.add_child(preview_frame)
+
+    roster_viewport = SubViewport.new()
+    roster_viewport.size = Vector2i(420, 370)
+    roster_viewport.own_world_3d = true
+    roster_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+    preview_frame.add_child(roster_viewport)
+    var scene_root := Node3D.new()
+    scene_root.name = "RosterShowcase"
+    roster_viewport.add_child(scene_root)
+    roster_preview_root = Node3D.new()
+    roster_preview_root.name = "AnimatedHero"
+    scene_root.add_child(roster_preview_root)
+
+    var environment := WorldEnvironment.new()
+    var env := Environment.new()
+    env.background_mode = Environment.BG_COLOR
+    env.background_color = Color("101826")
+    env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+    env.ambient_light_color = Color("b5bbcc")
+    env.ambient_light_energy = 1.1
+    environment.environment = env
+    scene_root.add_child(environment)
+    var key_light := DirectionalLight3D.new()
+    key_light.rotation_degrees = Vector3(-45, -28, -15)
+    key_light.light_energy = 1.25
+    scene_root.add_child(key_light)
+    var fill_light := DirectionalLight3D.new()
+    fill_light.rotation_degrees = Vector3(-18, 150, 0)
+    fill_light.light_energy = 0.58
+    scene_root.add_child(fill_light)
+    var display_camera := Camera3D.new()
+    display_camera.position = Vector3(0.0, 1.4, 4.8)
+    display_camera.fov = 48
+    scene_root.add_child(display_camera)
+    display_camera.look_at(Vector3(0, 1.2, 0), Vector3.UP)
+    display_camera.current = true
+
+    roster_selected_label = Label.new()
+    roster_selected_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    roster_selected_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    roster_selected_label.add_theme_font_size_override("font_size", 16)
+    roster_selected_label.add_theme_color_override("font_color", Color("efd8ad"))
+    preview_column.add_child(roster_selected_label)
+
+    _add_button(box, "Войти в город выбранным героем", Callable(self, "_enter_roster"), true)
+    _add_button(box, "← Назад", func(): _show_page("servers"))
+    var target := str(character.get("model_id", CharacterRoster.default_id()))
+    if CharacterRoster.get_entry(target).is_empty():
+        target = CharacterRoster.default_id()
+    _select_roster(target)
+
+
+func _select_roster(id: String) -> void:
+    var entry := CharacterRoster.get_entry(id)
+    if entry.is_empty():
+        return
+    selected_roster_id = id
+    if roster_selected_label != null:
+        roster_selected_label.text = str(entry["title"]) + " · " + str(entry["role"]) + " · " + str(entry["gender"])
+    if roster_preview_root == null or not is_instance_valid(roster_preview_root):
+        return
+    for child in roster_preview_root.get_children():
+        roster_preview_root.remove_child(child)
+        child.queue_free()
+    var path := CharacterRoster.model_path(id)
+    if not ResourceLoader.exists(path):
+        roster_selected_label.text += " · модель загружается"
+        return
+    var resource := load(path)
+    if not resource is PackedScene:
+        return
+    var scene: Node3D = (resource as PackedScene).instantiate()
+    scene.name = str(entry["title"])
+    roster_preview_root.add_child(scene)
+
+    # Fit every rig to the same preview frame while keeping original proportions.
+    var corners: Array[Vector3] = []
+    _collect_preview_points(scene, corners)
+    if not corners.is_empty():
+        var low := Vector3(INF, INF, INF)
+        var high := Vector3(-INF, -INF, -INF)
+        for point in corners:
+            low = low.min(point)
+            high = high.max(point)
+        var height := maxf(0.1, high.y - low.y)
+        var widest := maxf(high.x - low.x, high.z - low.z)
+        var scale_factor := minf(2.5 / height, 2.6 / maxf(0.1, widest))
+        scene.scale = Vector3.ONE * scale_factor
+        scene.position = Vector3(-(low.x + high.x) * 0.5, -low.y, -(low.z + high.z) * 0.5) * scale_factor
+    _start_preview_idle(scene)
+
+
+func _collect_preview_points(node: Node, corners: Array[Vector3]) -> void:
+    if node is MeshInstance3D:
+        var mesh_node := node as MeshInstance3D
+        if mesh_node.mesh != null:
+            var bounds := mesh_node.mesh.get_aabb()
+            for ix in range(2):
+                for iy in range(2):
+                    for iz in range(2):
+                        var corner := bounds.position + bounds.size * Vector3(float(ix), float(iy), float(iz))
+                        corners.append(mesh_node.global_transform * corner)
+    for child in node.get_children():
+        _collect_preview_points(child, corners)
+
+
+func _start_preview_idle(node: Node) -> void:
+    if node is AnimationPlayer:
+        var actor := node as AnimationPlayer
+        for clip in actor.get_animation_list():
+            if String(clip).to_lower().ends_with("idle"):
+                actor.play(clip)
+                return
+    for child in node.get_children():
+        _start_preview_idle(child)
+
+
+func _enter_roster() -> void:
+    var entry := CharacterRoster.get_entry(selected_roster_id)
+    if entry.is_empty():
+        return
+    var path := CharacterRoster.model_path(selected_roster_id)
+    if not ResourceLoader.exists(path):
+        _notice("Модель ещё не добавлена в сборку: " + str(entry["title"]))
+        return
+    character = {"name": entry["title"], "race": entry["species"],
+        "class": entry["role"], "model_id": selected_roster_id}
+    var save := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+    if save == null:
+        _notice("Не удалось сохранить выбранного героя.")
+        return
+    save.store_string(JSON.stringify(character))
+    save.close()
+    _enter()
+
 
 func _open_character_keyboard() -> void:
     if char_name == null or not is_instance_valid(char_name):
