@@ -53,7 +53,10 @@ var meshy_statue: PackedScene
 var meshy_citadel: PackedScene
 var meshy_throne: PackedScene
 var installed_wall_bays := 0
+var regular_wall_bays := 0
+var boss_wall_bays := 0
 const MAX_GLB_WALL_BAYS := 72
+const MAX_BOSS_WALL_BAYS := 18
 
 const MASONRY_PATTERN := """
 shader_type spatial;
@@ -371,8 +374,13 @@ func _decorate_wall_segment(location: Vector3, span: float, horizontal: bool, ne
         var offset := (float(index) + 0.5) * step - span * 0.5
         var bay := location + tangent * offset
         var is_statue := (installed_wall_bays + index) % 3 == 1
-        if installed_wall_bays < MAX_GLB_WALL_BAYS and _place_meshy_wall_bay(bay, inward, step, is_statue, near_boss):
+        var budget_available := boss_wall_bays < MAX_BOSS_WALL_BAYS if near_boss else regular_wall_bays < MAX_GLB_WALL_BAYS
+        if budget_available and _place_meshy_wall_bay(bay, inward, step, is_statue, near_boss):
             installed_wall_bays += 1
+            if near_boss:
+                boss_wall_bays += 1
+            else:
+                regular_wall_bays += 1
         else:
             # Models unavailable or mobile draw budget reached: masonry remains
             # visible and collision-solid, never an untextured grey blocker.
@@ -452,6 +460,9 @@ func _wall_part(at: Vector3, span: float, horizontal: bool, material: Material) 
     _add_box(at, dimensions, material)
 
 func _room_accents(room: Dictionary) -> void:
+    # Old oversized grey placeholder pillars are only for the no-GLB fallback.
+    if meshy_normal != null:
+        return
     var pos: Vector2 = room["pos"]
     var size: float = float(room["width"])
     var half := size * 0.5
