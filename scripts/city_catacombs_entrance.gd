@@ -3,7 +3,7 @@ extends Node3D
 # Forgotten Catacombs entrance on the NE fringe of ORVETHRA.
 # The last street comes from (78,78) to (90,94). Never move the approved roads.
 # A reduced imported Meshy crypt can replace this temporary walkable gate later.
-const MOBILE_CRYPT := "res://assets/catacombs/ruined_gothic_crypt_mobile.glb"
+const MOBILE_CRYPT := "res://assets/catacombs/crypt_entrance_mobile.glb"
 const CITY_PORTAL_POINT := Vector2(86.7, 89.5)
 
 func _ready() -> void:
@@ -11,7 +11,21 @@ func _ready() -> void:
     # City playfield ends at Z=93, so the gate sits on its centreline.
     position = Vector3(89.25, 0.0, 93.0)
     rotation.y = atan2(12.0, 16.0)
-    _gate_stones()
+    # The real Meshy crypt wins when the optional asset ZIP is installed.
+    if ResourceLoader.exists(MOBILE_CRYPT):
+        var asset: Resource = load(MOBILE_CRYPT)
+        if asset is PackedScene:
+            var crypt: Node3D = (asset as PackedScene).instantiate()
+            crypt.name = "MeshyGothicCryptMobile"
+            # Uniform scale keeps statues and carved arches proportional.
+            crypt.scale = Vector3.ONE * 3.2
+            crypt.position = Vector3(0, 2.08, 0.0)
+            add_child(crypt)
+            _gate_collision_only()
+        else:
+            _gate_stones()
+    else:
+        _gate_stones()
     var plaque := Label3D.new()
     plaque.text = "ЗАБЫТЫЕ КАТАКОМБЫ"
     plaque.font_size = 54
@@ -39,6 +53,19 @@ func _add_block(where: Vector3, bounds: Vector3, material: Material, collide := 
         body.position = where
         body.add_child(shape)
         add_child(body)
+
+func _gate_collision_only() -> void:
+    # Minimal collision: leave the centre passage clear to approach the door.
+    var body := StaticBody3D.new()
+    body.name = "CryptSideCollisions"
+    add_child(body)
+    for side in [-1.0, 1.0]:
+        var collider := CollisionShape3D.new()
+        var box := BoxShape3D.new()
+        box.size = Vector3(1.15, 3.7, 1.6)
+        collider.shape = box
+        collider.position = Vector3(side * 2.2, 1.85, 0.0)
+        body.add_child(collider)
 
 func _gate_stones() -> void:
     var masonry := StandardMaterial3D.new()
