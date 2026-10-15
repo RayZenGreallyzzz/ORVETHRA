@@ -1,4 +1,4 @@
-name: ORVETHRA Closer Character Camera v0.13
+name: ORVETHRA Forgotten Catacombs Layout v0.14
 
 on:
   push:
@@ -72,6 +72,16 @@ jobs:
             echo "City scene runtime error"
             exit 1
           fi
+      - name: Check catacombs scene starts headlessly
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s scenes/forgotten_catacombs.tscn
+          timeout 55 godot --headless --path . res://scenes/forgotten_catacombs.tscn --quit-after 3 2>&1 | tee build/catacombs-check.log
+          if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call|Invalid get index|ERROR: Failed loading' build/catacombs-check.log; then
+            echo "Catacombs scene runtime error"
+            exit 1
+          fi
       - name: Export signed debug test APK
         shell: bash
         run: |
@@ -82,6 +92,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ORVETHRA-City-Camera-Zoom-v013-Android
+          name: ORVETHRA-Catacombs-Layout-v014-Android
           path: build/ORVETHRA-IT801C-debug.apk
           retention-days: 14
