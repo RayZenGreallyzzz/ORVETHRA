@@ -5,7 +5,7 @@ const JoystickControl = preload("res://scripts/city_joystick.gd")
 var game
 var joystick
 var run_mode := true
-var layer: Control
+var ui_root: Control
 var area_title: Label
 var tip: Label
 var exit_button: Button
@@ -13,22 +13,22 @@ var camera_near: Button
 var camera_far: Button
 
 func _ready() -> void:
-    layer = Control.new()
-    layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    add_child(layer)
+    ui_root = Control.new()
+    ui_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    ui_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    add_child(ui_root)
     area_title = Label.new()
     area_title.text = "ORVETHRA · Забытые катакомбы"
     area_title.add_theme_font_size_override("font_size", 21)
     area_title.add_theme_color_override("font_color", Color("efd3b1"))
-    layer.add_child(area_title)
+    ui_root.add_child(area_title)
     tip = Label.new()
     tip.text = "Тест геометрии · 5 малых / 7 больших / босс"
     tip.add_theme_font_size_override("font_size", 15)
     tip.add_theme_color_override("font_color", Color("d2c9ba"))
-    layer.add_child(tip)
+    ui_root.add_child(tip)
     joystick = JoystickControl.new()
-    layer.add_child(joystick)
+    ui_root.add_child(joystick)
     exit_button = _button("Вернуться в город")
     exit_button.pressed.connect(func() -> void: game._return_to_city())
     camera_near = _button("Камера +")
@@ -43,11 +43,11 @@ func _button(caption: String) -> Button:
     b.text = caption
     b.focus_mode = Control.FOCUS_NONE
     b.add_theme_font_size_override("font_size", 17)
-    layer.add_child(b)
+    ui_root.add_child(b)
     return b
 
 func _layout() -> void:
-    if layer == null:
+    if ui_root == null:
         return
     var view := get_viewport().get_visible_rect().size
     area_title.position = Vector2(20, 14)
