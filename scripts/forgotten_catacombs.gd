@@ -304,10 +304,33 @@ func _emit_wall_segment(edge: int, first: int, last: int, horizontal: bool) -> v
     var location := Vector3(along, WALL_HEIGHT * 0.5, wall_line) if horizontal else Vector3(wall_line, WALL_HEIGHT * 0.5, along)
     var boss_center := Vector2(-17.0, -47.5)
     var near_boss := Vector2(location.x, location.z).distance_to(boss_center) < 18.0
+    # The throne extends through the north/back wall. Leave a 14m visual
+    # opening to display its full Meshy architecture; keep an invisible collider
+    # across that boundary so the player cannot leave the 25m room.
+    if horizontal and span > 20.0 and absf(location.z + 60.0) < 0.3:
+        _add_invisible_wall(location, Vector3(span, WALL_HEIGHT, WALL_THICKNESS))
+        var side_span := (span - 14.0) * 0.5
+        var side_offset := 7.0 + side_span * 0.5
+        for sign in [-1.0, 1.0]:
+            var wing := location + Vector3(sign * side_offset, 0, 0)
+            _add_box(wing, Vector3(side_span, WALL_HEIGHT, WALL_THICKNESS), masonry_mat, false)
+            _decorate_wall_segment(wing, side_span, true, true)
+        return
     # Textured stone backing covers joins, while Meshy faces stand proud of it.
     # Collision is kept on the perimeter and independent from the model meshes.
     _wall_part(location, span, horizontal, masonry_mat)
     _decorate_wall_segment(location, span, horizontal, near_boss)
+
+func _add_invisible_wall(at: Vector3, dimensions: Vector3) -> void:
+    var wall := StaticBody3D.new()
+    var shape := CollisionShape3D.new()
+    var collider := BoxShape3D.new()
+    collider.size = dimensions
+    shape.shape = collider
+    wall.position = at
+    wall.add_child(shape)
+    add_child(wall)
+
 
 func _has_adjacent_room(point: Vector2) -> bool:
     for room in ROOMS:
