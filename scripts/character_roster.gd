@@ -18,7 +18,7 @@ const ENTRIES := [
 static func model_path(id: String) -> String:
     if id == "neonalleycat" or id == "":
         return "res://assets/characters/ORVETHRA_NeonAlleycat_Animated_Mobile.glb"
-    return "res://assets/characters/test_roster/" + id + "_mobile.glb"
+    return "res://assets/characters/roster/" + id + "_mobile.glb"
 
 static func get_entry(id: String) -> Dictionary:
     for entry in ENTRIES:
