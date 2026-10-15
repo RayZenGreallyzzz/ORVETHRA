@@ -1,10 +1,11 @@
 extends "res://scripts/city_preview.gd"
 
 # ORVETHRA / Forgotten Catacombs: approved 5 small, 7 large, 1 boss layout.
-# One Godot unit = one metre. Corridors are 3m wide and 4–5m long.
+# One Godot unit = one metre. The clear corridor width stays near 3m.
+# Stone niches/statues are placed into rooms, never inside corridor corners.
 # Static stone geometry is deliberately lightweight until approved Meshy GLBs
 # are decimated and uploaded as actual mobile-ready assets.
-const PASSAGE_WIDTH := 3.0
+const PASSAGE_WIDTH := 3.5 # 3.5m floor, ~3.0m clear after 0.46m collision walls
 const WALL_HEIGHT := 4.5
 const WALL_THICKNESS := 0.46
 const DUNGEON_SPAWN := Vector3(0.0, 0.2, 75.0)
@@ -38,6 +39,7 @@ var stone: StandardMaterial3D
 var border_stone: StandardMaterial3D
 var red_stone: StandardMaterial3D
 var ember: StandardMaterial3D
+var statue_stone: StandardMaterial3D
 var floor_mat: ShaderMaterial
 var room_by_id: Dictionary = {}
 var walkable: Dictionary = {}
@@ -97,6 +99,7 @@ func _prepare_materials() -> void:
     stone = _plain("504d4c")
     border_stone = _plain("302d32")
     red_stone = _plain("5a3037")
+    statue_stone = _plain("81776c")
     ember = _plain("a53c35")
     ember.emission_enabled = true
     ember.emission = Color("b84d43")
@@ -176,7 +179,7 @@ func _build_corridor(a: Dictionary, b: Dictionary) -> void:
         var midpoint := (start.y + finish.y) * 0.5
         route = [start, Vector2(p.x, midpoint),
             Vector2(q.x, midpoint), finish]
-    # 3m-wide L/S-jog corridors, 4–5m between room boundaries.
+    # 3.5m gross width preserves roughly 3m walking clearance after wall collision.
     # Every link bends because paired room centres are offset 3–4.5m.
     for i in range(route.size() - 1):
         var first: Vector2 = route[i]
@@ -236,6 +239,86 @@ func _emit_wall_segment(edge: int, first: int, last: int, horizontal: bool) -> v
     var boss_center := Vector2(-17.0, -47.5)
     var near_boss := Vector2(location.x, location.z).distance_to(boss_center) < 18.0
     _wall_part(location, span, horizontal, red_stone if near_boss else stone)
+    _decorate_wall_segment(location, span, horizontal, near_boss)
+
+func _has_adjacent_room(point: Vector2) -> bool:
+    for room in ROOMS:
+        var pos: Vector2 = room["pos"]
+        var half: float = float(room["width"]) * 0.5
+        if absf(point.x - pos.x) <= half + 0.4 and absf(point.y - pos.y) <= half + 0.4:
+            return true
+    return false
+
+func _interior_normal(at: Vector3, horizontal: bool) -> Vector3:
+    # The float near the centre of each wall identifies its playable side.
+    var offset := Vector2(0.0, 0.36) if horizontal else Vector2(0.36, 0.0)
+    var right := Vector2(at.x, at.z) + offset
+    var cell := Vector2i(floori(right.x / CELL), floori(right.y / CELL))
+    if walkable.has(cell):
+        return Vector3(0, 0, 1) if horizontal else Vector3(1, 0, 0)
+    return Vector3(0, 0, -1) if horizontal else Vector3(-1, 0, 0)
+
+func _decorative_mesh(mesh: Mesh, position_3d: Vector3, mat: Material, rotation := Vector3.ZERO) -> void:
+    var visual := MeshInstance3D.new()
+    visual.mesh = mesh
+    visual.position = position_3d
+    visual.rotation = rotation
+    visual.material_override = mat
+    visual.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    add_child(visual)
+
+func _decorate_wall_segment(location: Vector3, span: float, horizontal: bool, near_boss: bool) -> void:
+    # Alternate plain wall bays and carved-statue bays. Only the room-side
+    # walls get statues; corridors remain clear of jutting ornamentation.
+    if span < 5.8 or not _has_adjacent_room(Vector2(location.x, location.z)):
+        return
+    var inward := _interior_normal(location, horizontal)
+    var tangent := Vector3(1, 0, 0) if horizontal else Vector3(0, 0, 1)
+    var count := maxi(1, int(floor(span / 4.2)))
+    var step := span / float(count)
+    for index in range(count):
+        var offset := (float(index) + 0.5) * step - span * 0.5
+        var bay := location + tangent * offset
+        if index % 2 == 1:
+            _stone_statue(bay, inward, near_boss)
+        else:
+            # A simple recessed-looking arch outline on alternating bays.
+            var trim := red_stone if near_boss else border_stone
+            var along_size := Vector3(step * 0.68, 0.22, 0.16) if horizontal else Vector3(0.16, 0.22, step * 0.68)
+            _add_box(bay + inward * 0.245 + Vector3.UP * 1.15,
+                along_size, trim, false)
+            _add_box(bay + inward * 0.245 - Vector3.UP * 1.22,
+                along_size, trim, false)
+
+func _stone_statue(at: Vector3, inward: Vector3, near_boss: bool) -> void:
+    # Low-poly sculpted guardian set back into a shallow gothic niche.
+    # Meshes are decorative (no collision), the solid wall keeps physics.
+    var shell := red_stone if near_boss else border_stone
+    var wall_face := at + inward * 0.34
+    _add_box(wall_face - Vector3.UP * 1.72, Vector3(0.88, 0.42, 0.84),
+        shell, false)
+    var torso := CapsuleMesh.new()
+    torso.radius = 0.31
+    torso.height = 1.3
+    torso.radial_segments = 7
+    torso.rings = 3
+    _decorative_mesh(torso, wall_face - Vector3.UP * 0.6, statue_stone)
+    var head := SphereMesh.new()
+    head.radius = 0.23
+    head.height = 0.46
+    head.radial_segments = 8
+    head.rings = 4
+    _decorative_mesh(head, wall_face + Vector3.UP * 0.38, statue_stone)
+    var halo := CylinderMesh.new()
+    halo.top_radius = 0.31
+    halo.bottom_radius = 0.42
+    halo.height = 0.22
+    halo.radial_segments = 8
+    _decorative_mesh(halo, wall_face + Vector3.UP * 0.65, shell)
+    # The statue's carved frame shares the original wall plane.
+    _add_box(at + inward * 0.22 + Vector3.UP * 1.55,
+        Vector3(1.03, 0.20, 0.28) if absf(inward.z) > 0.5 else Vector3(0.28, 0.20, 1.03),
+        shell, false)
 
 func _wall_part(at: Vector3, span: float, horizontal: bool, material: Material) -> void:
     var dimensions := Vector3(span, WALL_HEIGHT, WALL_THICKNESS) if horizontal else Vector3(WALL_THICKNESS, WALL_HEIGHT, span)
@@ -267,7 +350,25 @@ func _boss_details() -> void:
     ring.material_override = red_stone
     add_child(ring)
     # The centre is empty so a later imported Demonica can fight here.
-    _add_box(Vector3(-17, 0.48, -59.0), Vector3(4.6, 0.95, 1.65), border_stone)
+    # Spacious 25x25m boss chamber: high throne at the far wall, with
+    # side pillars and three raised steps. Central fighting area is free.
+    for step_idx in range(3):
+        var step_depth := 1.7 + float(step_idx) * 0.3
+        var step_width := 6.5 - float(step_idx) * 0.5
+        _add_box(Vector3(-17, 0.18 + float(step_idx) * 0.18, -57.2 - float(step_idx) * 0.58),
+            Vector3(step_width, 0.36 + float(step_idx) * 0.36, step_depth),
+            border_stone)
+    _add_box(Vector3(-17, 1.85, -59.0), Vector3(2.1, 3.2, 0.95), red_stone)
+    _add_box(Vector3(-17, 3.6, -59.0), Vector3(3.2, 0.65, 1.05), statue_stone, false)
+    for sign in [-1.0, 1.0]:
+        _add_box(Vector3(-17 + sign * 5.5, 2.3, -57.3),
+            Vector3(0.95, 4.6, 0.95), red_stone)
+        var crown := CylinderMesh.new()
+        crown.top_radius = 0.65
+        crown.bottom_radius = 0.85
+        crown.height = 0.5
+        crown.radial_segments = 10
+        _decorative_mesh(crown, Vector3(-17 + sign * 5.5, 4.7, -57.3), statue_stone)
     var boss_spot := Label3D.new()
     boss_spot.text = "DEMONICA  ·  ЗАЛ БОССА"
     boss_spot.font_size = 42
