@@ -92,7 +92,7 @@ func _ready() -> void:
     _player()
     if get_tree().has_meta("orvethra_return_from_catacombs"):
         get_tree().remove_meta("orvethra_return_from_catacombs")
-        player.position = Vector3(87.8, 0.12, 83.5)
+        player.position = Vector3(85.3, 0.12, 87.7)
     _interface()
     _update_camera()
 
@@ -509,7 +509,7 @@ func _catacomb_entrance() -> void:
 func _catacombs_is_near() -> bool:
     if player == null or overview:
         return false
-    return Vector2(player.position.x, player.position.z).distance_to(Vector2(88.0, 85.5)) < 4.0
+    return Vector2(player.position.x, player.position.z).distance_to(Vector2(86.7, 89.5)) < 5.0
 
 func _enter_catacombs() -> void:
     if _catacombs_is_near():
