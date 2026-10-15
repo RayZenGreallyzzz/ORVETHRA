@@ -1,4 +1,4 @@
-name: ORVETHRA Catacombs Meshy Scaling v0.17
+name: ORVETHRA Gothic 2D Catacombs v0.18
 
 on:
   push:
@@ -40,6 +40,14 @@ jobs:
           test -s assets/characters/ORVETHRA_NeonAlleycat_Animated_Mobile.glb
           test -s assets/fountain/guardian_fountain_mobile.bin
           test -s scripts/fountain_mobile.gd
+          test -s scripts/catacombs_wall_art.gd
+          test -s assets/catacombs/tiles/wall_guard_mobile.webp
+          test -s assets/catacombs/tiles/wall_stone_mobile.webp
+          test -s assets/catacombs/tiles/floor_stone_mobile.webp
+          test -s assets/catacombs/decor/angel_sword_statue_mobile.webp
+          test -s assets/catacombs/decor/crimson_skull_banner_mobile.webp
+          test -s assets/catacombs/decor/crimson_rune_banner_mobile.webp
+          test -s assets/catacombs/decor/golden_chain_mobile.webp
           grep -q 'res://scenes/main_menu.tscn' project.godot
           echo "Verified ORVETHRA animated hero + plaza fountain test source"
           mkdir -p build
@@ -101,6 +109,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ORVETHRA-Catacombs-Scaled-v017-Android
+          name: ORVETHRA-Gothic-2D-Dungeon-v018-Android
           path: build/ORVETHRA-IT801C-debug.apk
           retention-days: 14
