@@ -236,6 +236,7 @@ func _show_roster(box: VBoxContainer) -> void:
         var label := str(entry["title"]) + "  ·  " + str(entry["species"])
         var button := _add_button(list, label, Callable(self, "_select_roster").bind(str(entry["id"])))
         button.custom_minimum_size.y = 44
+        button.disabled = not ResourceLoader.exists(CharacterRoster.model_path(str(entry["id"])))
         button.add_theme_font_size_override("font_size", 16)
 
     var preview_column := VBoxContainer.new()
