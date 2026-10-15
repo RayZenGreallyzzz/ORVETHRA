@@ -7,6 +7,7 @@ const MAP_HALF_Z := 93.0
 const HERO_SCENE_PATH := "res://assets/characters/ORVETHRA_NeonAlleycat_Animated_Mobile.glb"
 const FountainMobile = preload("res://scripts/fountain_mobile.gd")
 const TrainingField = preload("res://scripts/city_training.gd")
+const CryptEntrance = preload("res://scripts/city_catacombs_entrance.gd")
 var player: CharacterBody3D
 var camera: Camera3D
 var yaw := 0.0
@@ -87,7 +88,11 @@ func _ready() -> void:
     _layout()
     FountainMobile.add_to(self)
     _training_area()
+    _catacomb_entrance()
     _player()
+    if get_tree().has_meta("orvethra_return_from_catacombs"):
+        get_tree().remove_meta("orvethra_return_from_catacombs")
+        player.position = Vector3(87.8, 0.12, 83.5)
     _interface()
     _update_camera()
 
@@ -495,6 +500,20 @@ func _update_camera() -> void:
         var direction := Vector3(sin(yaw) * cos(pitch), sin(pitch), cos(yaw) * cos(pitch))
         camera.global_position = focus + direction * camera_distance
         camera.look_at(focus, Vector3.UP)
+
+func _catacomb_entrance() -> void:
+    var crypt := CryptEntrance.new()
+    crypt.name = "ForgottenCatacombsEntrance"
+    add_child(crypt)
+
+func _catacombs_is_near() -> bool:
+    if player == null or overview:
+        return false
+    return Vector2(player.position.x, player.position.z).distance_to(Vector2(88.0, 85.5)) < 4.0
+
+func _enter_catacombs() -> void:
+    if _catacombs_is_near():
+        get_tree().change_scene_to_file("res://scenes/forgotten_catacombs.tscn")
 
 func _training_area() -> void:
     training = TrainingField.new()
