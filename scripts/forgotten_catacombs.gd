@@ -1,5 +1,7 @@
 extends "res://scripts/city_preview.gd"
 
+const WallArtwork = preload("res://scripts/catacombs_wall_art.gd")
+
 # ORVETHRA / Forgotten Catacombs: approved 5 small, 7 large, 1 boss layout.
 # One Godot unit = one metre. 4m gross = ~3.5m clear with perimeter colliders.
 # Real Meshy pieces are the visible architecture, the procedural stone is only
@@ -45,6 +47,7 @@ var walkable: Dictionary = {}
 var floor_mat: ShaderMaterial
 var masonry_mat: ShaderMaterial
 var guard_mat: StandardMaterial3D
+var wall_art_helper
 
 const STONE_WALL_SHADER := """
 shader_type spatial;
@@ -84,6 +87,7 @@ func _ready() -> void:
     camera_distance = clampf(camera_distance, 4.0, 7.5)
     _dungeon_light()
     _prepare_materials()
+    wall_art_helper = WallArtwork.new()
     _build_map()
     _player()
     player.position = DUNGEON_SPAWN
@@ -176,6 +180,7 @@ func _build_map() -> void:
     for link in LINKS:
         _build_corridor(room_by_id[link[0]], room_by_id[link[1]])
     _build_perimeter_walls()
+    wall_art_helper.decorate_boss(self)
     _exit_marker()
 
 func _paint_floor(at: Vector2, extent: Vector2) -> void:
@@ -298,31 +303,10 @@ func _interior_normal(at: Vector3, horizontal: bool) -> Vector3:
 
 
 func _decorate_guard_tile(location: Vector3, span: float, horizontal: bool) -> void:
-    # The first wall image is flat decoration, not 3D geometry. Place it
-    # only inside actual rooms, leaving narrow corridors with repeatable brick.
-    if span < 5.4 or not _has_adjacent_room(Vector2(location.x, location.z)):
+    if span < 5.5 or not _has_adjacent_room(Vector2(location.x, location.z)):
         return
     var inward := _interior_normal(location, horizontal)
-    var tangent := Vector3(1, 0, 0) if horizontal else Vector3(0, 0, 1)
-    # One guardian for roughly every 10 metres, enough variety without
-    # pasting identical statues shoulder-to-shoulder or adding heavy models.
-    var bays := maxi(1, int(round(span / 10.5)))
-    var spacing := span / float(bays)
-    for index in range(bays):
-        var square_size := minf(WALL_HEIGHT - 0.05, spacing * 0.82)
-        if square_size < 3.3:
-            continue
-        var panel := MeshInstance3D.new()
-        panel.name = "FlatGuardianWall"
-        var quad := QuadMesh.new()
-        quad.size = Vector2(square_size, square_size)
-        panel.mesh = quad
-        panel.material_override = guard_mat
-        panel.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-        panel.rotation.y = atan2(inward.x, inward.z)
-        var offset := (float(index) + 0.5) * spacing - span * 0.5
-        panel.position = location + tangent * offset + inward * (WALL_THICKNESS * 0.5 + 0.018)
-        add_child(panel)
+    wall_art_helper.decorate_room_section(self, location, inward, horizontal, span)
 
 
 func _exit_marker() -> void:
