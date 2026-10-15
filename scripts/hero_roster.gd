@@ -6,15 +6,15 @@ const SAVE_PATH := "user://orvethra_hero_roster.json"
 const DEFAULT_ID := "neonalleycat"
 const ENTRIES := [
     {"id":"neonalleycat", "name":"Неон Тенехвост", "source":"NeonAlleycat", "model":"res://assets/characters/ORVETHRA_NeonAlleycat_Animated_Mobile.glb", "role":"Страж переулков", "clip":"Idle"},
-    {"id":"dododog", "name":"Громолап", "source":"Dododog", "model":"res://assets/characters/roster/dododog_mobile.glb", "role":"Бродячий громовержец", "clip":"Idle"},
-    {"id":"kwnips_baby", "name":"Искрикс", "source":"KWNIPS Baby", "model":"res://assets/characters/roster/kwnips_baby_mobile.glb", "role":"Юный повелитель искр", "clip":"Idle"},
-    {"id":"meerkat_baby", "name":"Шустрик", "source":"Meerkat Baby", "model":"res://assets/characters/roster/meerkat_baby_mobile.glb", "role":"Маленький разведчик", "clip":"Idle"},
-    {"id":"meerkat", "name":"Зорн Песчаный", "source":"Meerkat", "model":"res://assets/characters/roster/meerkat_mobile.glb", "role":"Хранитель барханов", "clip":"Idle"},
-    {"id":"kwnips", "name":"Ноктариус", "source":"KWNIPS", "model":"res://assets/characters/roster/kwnips_mobile.glb", "role":"Маг теневых знаков", "clip":"Idle"},
-    {"id":"badboy", "name":"Рейзор", "source":"BadBoy", "model":"res://assets/characters/roster/badboy_mobile.glb", "role":"Уличный дуэлянт", "clip":"Idle"},
-    {"id":"bunny", "name":"Лунопрыг", "source":"Bunny", "model":"res://assets/characters/roster/bunny_mobile.glb", "role":"Прыгун лунной тропы", "clip":"Idle"},
-    {"id":"graffitialleycat", "name":"Тенеклык", "source":"GraffitiAlleyCat", "model":"res://assets/characters/roster/graffitialleycat_mobile.glb", "role":"Клинок ночного города", "clip":"Idle"},
-    {"id":"crimsondrakeshadow", "name":"Алый Дрейк", "source":"CrimsonDrakeshadow Lizard", "model":"res://assets/characters/roster/crimsondrakeshadow_lizard_mobile.glb", "role":"Наследник драконьей тени", "clip":"Idle"}
+    {"id":"dododog", "name":"Доргар Лютолап", "source":"Dododog", "model":"res://assets/characters/roster/dododog_mobile.glb", "role":"Страж диких троп", "clip":"Idle"},
+    {"id":"kwnips_baby", "name":"Нимрия Лунолапа", "source":"KWNIPS Baby", "model":"res://assets/characters/roster/kwnips_baby_mobile.glb", "role":"Лунная колдунья, самка", "clip":"Idle"},
+    {"id":"meerkat_baby", "name":"Мира Песчаная Искра", "source":"Meerkat Baby", "model":"res://assets/characters/roster/meerkat_baby_mobile.glb", "role":"Песчаная следопытка, самка", "clip":"Idle"},
+    {"id":"meerkat", "name":"Тарек Песчаный Клык", "source":"Meerkat", "model":"res://assets/characters/roster/meerkat_mobile.glb", "role":"Страж пустыни, самец", "clip":"Idle"},
+    {"id":"kwnips", "name":"Кворн Грозолап", "source":"KWNIPS", "model":"res://assets/characters/roster/kwnips_mobile.glb", "role":"Грозовой маг, самец", "clip":"Idle"},
+    {"id":"badboy", "name":"Рокхар Беззаконник", "source":"BadBoy", "model":"res://assets/characters/roster/badboy_mobile.glb", "role":"Тёмный дуэлянт", "clip":"Idle"},
+    {"id":"bunny", "name":"Лунар Серебролап", "source":"Bunny", "model":"res://assets/characters/roster/bunny_mobile.glb", "role":"Ловкий боец", "clip":"Idle"},
+    {"id":"graffitialleycat", "name":"Граффит Ночной Коготь", "source":"GraffitiAlleyCat", "model":"res://assets/characters/roster/graffitialleycat_mobile.glb", "role":"Теневой клинок", "clip":"Idle"},
+    {"id":"crimsondrakeshadow_lizard", "name":"Кримзар Тенедракон", "source":"CrimsonDrakeshadow Lizard", "model":"res://assets/characters/roster/crimsondrakeshadow_lizard_mobile.glb", "role":"Багровый воин", "clip":"Idle"}
 ]
 
 static func by_id(id: String) -> Dictionary:
