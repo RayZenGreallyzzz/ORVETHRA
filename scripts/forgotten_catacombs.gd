@@ -43,6 +43,17 @@ var statue_stone: StandardMaterial3D
 var floor_mat: ShaderMaterial
 var room_by_id: Dictionary = {}
 var walkable: Dictionary = {}
+# Optional shared Meshy resources. Absent GLBs fall back to lightweight geometry.
+const NORMAL_WALL_GLB := "res://assets/catacombs/torchlit_gothic_wall_mobile.glb"
+const STATUE_WALL_GLB := "res://assets/catacombs/torchlit_statue_wall_mobile.glb"
+const CITADEL_WALL_GLB := "res://assets/catacombs/citadel_wall_mobile.glb"
+const THRONE_GLB := "res://assets/catacombs/demonica_throne_mobile.glb"
+var meshy_normal: PackedScene
+var meshy_statue: PackedScene
+var meshy_citadel: PackedScene
+var meshy_throne: PackedScene
+var installed_wall_bays := 0
+const MAX_GLB_WALL_BAYS := 24
 
 const FLOOR_PATTERN := """
 shader_type spatial;
@@ -70,6 +81,7 @@ func _ready() -> void:
     camera_distance = clampf(camera_distance, 4.0, 7.5)
     _dungeon_light()
     _prepare_materials()
+    _load_mobile_meshes()
     _build_map()
     _player()
     player.position = DUNGEON_SPAWN
@@ -105,6 +117,16 @@ func _prepare_materials() -> void:
     ember.emission = Color("b84d43")
     ember.emission_energy_multiplier = 1.6
     floor_mat = _make_shader(FLOOR_PATTERN)
+
+func _load_mobile_meshes() -> void:
+    if ResourceLoader.exists(NORMAL_WALL_GLB):
+        meshy_normal = load(NORMAL_WALL_GLB) as PackedScene
+    if ResourceLoader.exists(STATUE_WALL_GLB):
+        meshy_statue = load(STATUE_WALL_GLB) as PackedScene
+    if ResourceLoader.exists(CITADEL_WALL_GLB):
+        meshy_citadel = load(CITADEL_WALL_GLB) as PackedScene
+    if ResourceLoader.exists(THRONE_GLB):
+        meshy_throne = load(THRONE_GLB) as PackedScene
 
 func _add_box(at: Vector3, dimensions: Vector3, mat: Material, collide: bool = true) -> Node3D:
     var mesh_node := MeshInstance3D.new()
@@ -279,6 +301,9 @@ func _decorate_wall_segment(location: Vector3, span: float, horizontal: bool, ne
     for index in range(count):
         var offset := (float(index) + 0.5) * step - span * 0.5
         var bay := location + tangent * offset
+        if installed_wall_bays < MAX_GLB_WALL_BAYS and _place_meshy_wall_bay(bay, inward, horizontal, step, index, near_boss):
+            installed_wall_bays += 1
+            continue
         if index % 2 == 1:
             _stone_statue(bay, inward, near_boss)
         else:
@@ -289,6 +314,31 @@ func _decorate_wall_segment(location: Vector3, span: float, horizontal: bool, ne
                 along_size, trim, false)
             _add_box(bay + inward * 0.245 - Vector3.UP * 1.22,
                 along_size, trim, false)
+
+func _place_meshy_wall_bay(at: Vector3, inward: Vector3, horizontal: bool, width: float, index: int, near_boss: bool) -> bool:
+    var scene: PackedScene = meshy_statue if index % 2 == 1 else meshy_normal
+    var span := 1.83 if index % 2 == 1 else 1.90
+    var height := 1.67 if index % 2 == 1 else 0.74
+    var depth := 1.86 if index % 2 == 1 else 0.275
+    if near_boss and index % 2 == 0 and meshy_citadel != null:
+        scene = meshy_citadel
+        span = 1.90
+        height = 0.70
+        depth = 0.265
+    if scene == null:
+        return false
+    # Uniform only: never stretch the Meshy statues, carved stone or UVs.
+    var factor := minf(width * 0.92 / span, 4.15 / height)
+    var model := scene.instantiate() as Node3D
+    model.name = "MeshyWallBay_" + str(installed_wall_bays)
+    model.scale = Vector3.ONE * factor
+    model.rotation.y = 0.0 if horizontal else PI * 0.5
+    # Push thickness behind the physical collision wall: max 0.34m on
+    # the room side. This preserves the 3m clear walking corridor.
+    model.position = Vector3(at.x, height * factor * 0.5 + 0.03, at.z)
+    model.position -= inward * (depth * factor * 0.5 - 0.34)
+    add_child(model)
+    return true
 
 func _stone_statue(at: Vector3, inward: Vector3, near_boss: bool) -> void:
     # Low-poly sculpted guardian set back into a shallow gothic niche.
@@ -349,27 +399,36 @@ func _boss_details() -> void:
     ring.position = pos
     ring.material_override = red_stone
     add_child(ring)
-    # The centre is empty so a later imported Demonica can fight here.
-    # Spacious 25x25m boss chamber: high throne at the far wall, with
-    # side pillars and three raised steps. Central fighting area is free.
-    for step_idx in range(3):
-        var step_depth := 1.7 + float(step_idx) * 0.3
-        var step_width := 6.5 - float(step_idx) * 0.5
-        _add_box(Vector3(-17, 0.18 + float(step_idx) * 0.18, -57.2 - float(step_idx) * 0.58),
-            Vector3(step_width, 0.36 + float(step_idx) * 0.36, step_depth),
-            border_stone)
-    _add_box(Vector3(-17, 1.85, -59.0), Vector3(2.1, 3.2, 0.95), red_stone)
-    _add_box(Vector3(-17, 3.6, -59.0), Vector3(3.2, 0.65, 1.05), statue_stone, false)
-    for sign in [-1.0, 1.0]:
-        _add_box(Vector3(-17 + sign * 5.5, 2.3, -57.3),
-            Vector3(0.95, 4.6, 0.95), red_stone)
-        var crown := CylinderMesh.new()
-        crown.top_radius = 0.65
-        crown.bottom_radius = 0.85
-        crown.height = 0.5
-        crown.radial_segments = 10
-        _decorative_mesh(crown, Vector3(-17 + sign * 5.5, 4.7, -57.3), statue_stone)
-    var boss_spot := Label3D.new()
+    # Keep a completely open fighting centre; the imported hall is a
+    # scaled prop at the back, not a replacement for the 25x25m arena.
+    if meshy_throne != null:
+        var throne := meshy_throne.instantiate() as Node3D
+        throne.name = "MeshyDemonicaThrone"
+        throne.scale = Vector3.ONE * 4.0
+        throne.position = Vector3(-17, 2.08, -55.7)
+        add_child(throne)
+    else:
+        # The centre is empty so a later imported Demonica can fight here.
+        # Spacious 25x25m boss chamber: high throne at the far wall, with
+        # side pillars and three raised steps. Central fighting area is free.
+        for step_idx in range(3):
+            var step_depth := 1.7 + float(step_idx) * 0.3
+            var step_width := 6.5 - float(step_idx) * 0.5
+            _add_box(Vector3(-17, 0.18 + float(step_idx) * 0.18, -57.2 - float(step_idx) * 0.58),
+                Vector3(step_width, 0.36 + float(step_idx) * 0.36, step_depth),
+                border_stone)
+        _add_box(Vector3(-17, 1.85, -59.0), Vector3(2.1, 3.2, 0.95), red_stone)
+        _add_box(Vector3(-17, 3.6, -59.0), Vector3(3.2, 0.65, 1.05), statue_stone, false)
+        for sign in [-1.0, 1.0]:
+            _add_box(Vector3(-17 + sign * 5.5, 2.3, -57.3),
+                Vector3(0.95, 4.6, 0.95), red_stone)
+            var crown := CylinderMesh.new()
+            crown.top_radius = 0.65
+            crown.bottom_radius = 0.85
+            crown.height = 0.5
+            crown.radial_segments = 10
+            _decorative_mesh(crown, Vector3(-17 + sign * 5.5, 4.7, -57.3), statue_stone)
+        var boss_spot := Label3D.new()
     boss_spot.text = "DEMONICA  ·  ЗАЛ БОССА"
     boss_spot.font_size = 42
     boss_spot.pixel_size = 0.012
