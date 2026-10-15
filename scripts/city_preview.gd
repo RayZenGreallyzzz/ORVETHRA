@@ -360,6 +360,23 @@ func _lowest_mesh_y(node: Node, relative_to_hero: Transform3D) -> float:
         bottom = minf(bottom, _lowest_mesh_y(child, relative_to_hero))
     return bottom
 
+func _highest_mesh_y(node: Node, relative_to_hero: Transform3D) -> float:
+    var top := -INF
+    if node is MeshInstance3D:
+        var mesh_node := node as MeshInstance3D
+        if mesh_node.mesh != null:
+            var bb := mesh_node.mesh.get_aabb()
+            var rel := relative_to_hero * mesh_node.global_transform
+            for ix in range(2):
+                for iy in range(2):
+                    for iz in range(2):
+                        var point := bb.position + bb.size * Vector3(float(ix), float(iy), float(iz))
+                        top = maxf(top, (rel * point).y)
+    for child in node.get_children():
+        top = maxf(top, _highest_mesh_y(child, relative_to_hero))
+    return top
+
+
 func _disable_hero_shadows(node: Node) -> void:
     if node is GeometryInstance3D:
         node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -396,9 +413,19 @@ func _player() -> void:
         hero_visual.position.y = 0.0
         player.add_child(hero_visual)
         _disable_hero_shadows(hero_visual)
-        var lowest := _lowest_mesh_y(hero_visual, hero_visual.global_transform.affine_inverse())
-        # Align the actual mesh bounding box instead of assuming 0.95m.
-        hero_visual.position.y = (-lowest + 0.055) if lowest != INF else 0.95
+        var root_inverse := hero_visual.global_transform.affine_inverse()
+        var lowest := _lowest_mesh_y(hero_visual, root_inverse)
+        var highest := _highest_mesh_y(hero_visual, root_inverse)
+        if lowest != INF and highest != -INF:
+            # Eight imported Mixamo GLBs have an armature scaled 0.01.
+            # Make them all 1.8m tall using ONE uniform root scale; preserve
+            # the rigged proportions and keep the physics capsule consistent.
+            var full_height := maxf(0.01, highest - lowest)
+            var model_scale := clampf(1.8 / full_height, 0.35, 180.0)
+            hero_visual.scale = Vector3.ONE * model_scale
+            hero_visual.position.y = (-lowest * model_scale + 0.055)
+        else:
+            hero_visual.position.y = 0.95
         hero_anim = _find_animation_player(hero_visual)
         _prepare_hero_animations()
         _play_hero("Idle")
