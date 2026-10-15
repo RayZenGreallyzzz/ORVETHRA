@@ -4,6 +4,7 @@ extends RefCounted
 # NOT adults with baby companions; source filename suffixes are kept intact.
 # Filenames deliberately use ASCII for Godot/Android resource portability.
 const ENTRIES := [
+    {"id":"neonalleycat", "title":"Неон Тенехвост", "species":"Уличный кот", "role":"Страж переулков", "gender":"Самец", "clip":"Run"},
     {"id":"dododog", "title":"Доргар Лютолап", "species":"Додопёс", "role":"Страж диких троп", "gender":"Самец", "clip":"Walk"},
     {"id":"kwnips_baby", "title":"Нимрия Лунолапа", "species":"Квнипс", "role":"Лунная колдунья", "gender":"Самка", "clip":"Walk"},
     {"id":"meerkat_baby", "title":"Мира Песчаная Искра", "species":"Сурикат", "role":"Песчаная следопытка", "gender":"Самка", "clip":"Walk"},
@@ -27,4 +28,4 @@ static func get_entry(id: String) -> Dictionary:
     return {}
 
 static func default_id() -> String:
-    return "dododog"
+    return "neonalleycat"
