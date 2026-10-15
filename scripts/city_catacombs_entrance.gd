@@ -4,10 +4,12 @@ extends Node3D
 # The last street comes from (78,78) to (90,94). Never move the approved roads.
 # A reduced imported Meshy crypt can replace this temporary walkable gate later.
 const MOBILE_CRYPT := "res://assets/catacombs/ruined_gothic_crypt_mobile.glb"
-const CITY_PORTAL_POINT := Vector2(88.0, 85.5)
+const CITY_PORTAL_POINT := Vector2(86.7, 89.5)
 
 func _ready() -> void:
-    position = Vector3(90, 0.0, 89)
+    # Align the gateway with the road from (78,78) toward (90,94).
+    # City playfield ends at Z=93, so the gate sits on its centreline.
+    position = Vector3(89.25, 0.0, 93.0)
     rotation.y = atan2(12.0, 16.0)
     _gate_stones()
     var plaque := Label3D.new()
