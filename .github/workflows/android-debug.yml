@@ -26,6 +26,19 @@ jobs:
           else
             echo "Optional catacomb model archive not uploaded: keep lightweight placeholders"
           fi
+      - name: Unpack rigged character models
+        shell: bash
+        run: |
+          set -euo pipefail
+          if compgen -G 'assets/characters/roster/*.glb.gz' > /dev/null; then
+            for file in assets/characters/roster/*.glb.gz; do
+              gzip -t "$file"
+              gzip -dc "$file" > "${file%.gz}"
+              test -s "${file%.gz}"
+            done
+          fi
+          echo "Animated character models unpacked:"
+          ls -lh assets/characters/roster/*.glb 2>/dev/null || true
       - name: Verify committed Godot source
         shell: bash
         run: |
