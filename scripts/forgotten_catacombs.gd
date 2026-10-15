@@ -186,11 +186,8 @@ func _build_corridor(a: Dictionary, b: Dictionary) -> void:
     var a_half: float = float(a["width"]) * 0.5
     var b_half: float = float(b["width"]) * 0.5
     if absf(p.x - q.x) > absf(p.y - q.y):
-        var left := minf(p.x + (a_half if p.x < q.x else b_half), q.x + (b_half if q.x < p.x else a_half))
-        var right := maxf(p.x - (a_half if p.x > q.x else b_half), q.x - (b_half if q.x > p.x else a_half))
-        # Explicit edge-to-edge distance, regardless of link ordering.
-        left = (p.x + a_half) if p.x < q.x else (q.x + b_half)
-        right = (q.x - b_half) if p.x < q.x else (p.x - a_half)
+        var left := (p.x + a_half) if p.x < q.x else (q.x + b_half)
+        var right := (q.x - b_half) if p.x < q.x else (p.x - a_half)
         var length := right - left
         var mid := (left + right) * 0.5
         _add_box(Vector3(mid, -0.13, p.y), Vector3(length + 0.2, 0.24, PASSAGE_WIDTH), floor_mat)
@@ -259,4 +256,6 @@ func _exit_marker() -> void:
     add_child(plaque)
 
 func _return_to_city() -> void:
+    # Restore the hero just outside the crypt instead of at the fountain.
+    get_tree().set_meta("orvethra_return_from_catacombs", true)
     get_tree().change_scene_to_file("res://scenes/city_preview.tscn")
