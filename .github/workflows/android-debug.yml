@@ -30,6 +30,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          for folder in assets/characters/roster_parts/*; do
+            [ -d "$folder" ] || continue
+            id="${folder##*/}"
+            cat "$folder"/*.b64 | base64 --decode > "assets/characters/roster/${id}_mobile.glb.gz"
+            gzip -t "assets/characters/roster/${id}_mobile.glb.gz"
+          done
           if compgen -G 'assets/characters/roster/*.glb.gz' > /dev/null; then
             for file in assets/characters/roster/*.glb.gz; do
               gzip -t "$file"
