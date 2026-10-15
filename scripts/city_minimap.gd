@@ -37,6 +37,14 @@ func _draw() -> void:
     if training_icon.distance_to(center) < radius:
         draw_circle(training_icon, 6.0, Color(0.88, 0.34, 0.35, 1.0))
         draw_arc(training_icon, 8.0, 0, TAU, 24, Color(0.99, 0.85, 0.53, 0.96), 2.0, true)
+    # Forgotten Catacombs crypt at the dead-end of the NE road.
+    var crypt_icon := _map(Vector2(90.0, 89.0))
+    if crypt_icon.distance_to(center) < radius:
+        draw_colored_polygon(PackedVector2Array([
+            crypt_icon + Vector2(0, -7), crypt_icon + Vector2(7, 0),
+            crypt_icon + Vector2(0, 7), crypt_icon + Vector2(-7, 0)
+        ]), Color(0.64, 0.35, 0.77, 1.0))
+        draw_arc(crypt_icon, 9.0, 0, TAU, 24, Color("d9baeb"), 1.7, true)
     var cursor := _map(player_xz)
     cursor = center + (cursor - center).limit_length(radius - 13.0)
     var direction := Vector2(-sin(facing), -cos(facing))
