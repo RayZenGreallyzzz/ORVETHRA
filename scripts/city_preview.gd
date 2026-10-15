@@ -4,7 +4,8 @@ extends Node3D
 # No 19k x 17k PNG: road ribbons are geometry and pavement is world-space tiled.
 const MAP_HALF_X := 107.0
 const MAP_HALF_Z := 93.0
-const HERO_SCENE_PATH := "res://assets/characters/ORVETHRA_NeonAlleycat_Animated_Mobile.glb"
+const HeroRoster = preload("res://scripts/hero_roster.gd")
+const HERO_FALLBACK_PATH := "res://assets/characters/ORVETHRA_NeonAlleycat_Animated_Mobile.glb"
 const FountainMobile = preload("res://scripts/fountain_mobile.gd")
 const TrainingField = preload("res://scripts/city_training.gd")
 const CryptEntrance = preload("res://scripts/city_catacombs_entrance.gd")
@@ -285,6 +286,17 @@ func _resolve_hero_animation(wanted: String) -> StringName:
         var lower := candidate.to_lower()
         if lower == target or lower.ends_with("/" + target) or lower.ends_with(target):
             return anim_name
+    # Mixamo packs use Walk on five test models and Run on the other four.
+    if target == "run" or target == "walk":
+        var alternative := "walk" if target == "run" else "run"
+        for anim_name in hero_anim.get_animation_list():
+            var alt := String(anim_name).to_lower()
+            if alt == alternative or alt.ends_with("/" + alternative):
+                return anim_name
+    if target == "idle":
+        for anim_name in hero_anim.get_animation_list():
+            if String(anim_name).to_lower().ends_with("idle"):
+                return anim_name
     return &""
 
 func _play_hero(wanted: String) -> void:
@@ -369,10 +381,15 @@ func _player() -> void:
     collision.position.y = 0.93
     player.add_child(collision)
 
-    var hero_scene = load(HERO_SCENE_PATH)
+    # The player picks one of the nine test GLB heroes in the main menu.
+    # Fall back safely to NeonAlleycat if this installation lacks an asset.
+    var chosen: Dictionary = HeroRoster.selected_entry()
+    var selected_path := str(chosen.get("model", HERO_FALLBACK_PATH))
+    var hero_path := selected_path if ResourceLoader.exists(selected_path) else HERO_FALLBACK_PATH
+    var hero_scene = load(hero_path)
     if hero_scene is PackedScene:
         hero_visual = hero_scene.instantiate()
-        hero_visual.name = "NeonAlleycat"
+        hero_visual.name = str(chosen.get("name", "NeonAlleycat"))
         # The baked Mixamo mesh was authored facing +Z; Godot movement faces -Z.
         # Rotate only the visible rig by 180 degrees, never mirror the skeleton.
         hero_visual.rotation.y = PI if reverse_imported_facing else 0.0
