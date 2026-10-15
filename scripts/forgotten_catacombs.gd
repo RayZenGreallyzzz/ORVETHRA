@@ -428,7 +428,7 @@ func _boss_details() -> void:
             crown.height = 0.5
             crown.radial_segments = 10
             _decorative_mesh(crown, Vector3(-17 + sign * 5.5, 4.7, -57.3), statue_stone)
-        var boss_spot := Label3D.new()
+    var boss_spot := Label3D.new()
     boss_spot.text = "DEMONICA  ·  ЗАЛ БОССА"
     boss_spot.font_size = 42
     boss_spot.pixel_size = 0.012
