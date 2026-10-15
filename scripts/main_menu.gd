@@ -4,6 +4,7 @@ extends Control
 const SAVE_PATH := "user://orvethra_guest.json"
 const PREFERENCES_PATH := "user://orvethra_preferences.json"
 const CharacterRoster = preload("res://scripts/character_roster.gd")
+const HeroRoster = preload("res://scripts/hero_roster.gd")
 var auto_rotation := false
 var keyboard_overlay: ColorRect
 var keyboard_grid: GridContainer
@@ -380,6 +381,7 @@ func _enter_roster() -> void:
         return
     save.store_string(JSON.stringify(character))
     save.close()
+    HeroRoster.save_id(selected_roster_id)
     _enter()
 
 
