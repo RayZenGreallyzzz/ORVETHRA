@@ -18,8 +18,11 @@ func _ready() -> void:
             var crypt: Node3D = (asset as PackedScene).instantiate()
             crypt.name = "MeshyGothicCryptMobile"
             # Uniform scale keeps statues and carved arches proportional.
-            crypt.scale = Vector3.ONE * 3.2
-            crypt.position = Vector3(0, 2.08, 0.0)
+            # Optimized Meshy crypt is 1.895 x 1.251 x 1.472 metres.
+            # Uniform 4.6x makes a ~8.7m-wide, ~5.75m-tall gate matching
+            # the 8.8m cobbled street without distorting statues or arches.
+            crypt.scale = Vector3.ONE * 4.6
+            crypt.position = Vector3(0, 2.88, 0.0)
             add_child(crypt)
             _gate_collision_only()
         else:
@@ -28,10 +31,10 @@ func _ready() -> void:
         _gate_stones()
     var plaque := Label3D.new()
     plaque.text = "ЗАБЫТЫЕ КАТАКОМБЫ"
-    plaque.font_size = 54
-    plaque.pixel_size = 0.011
+    plaque.font_size = 28
+    plaque.pixel_size = 0.009
     plaque.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-    plaque.position = Vector3(0, 4.5, -1.3)
+    plaque.position = Vector3(0, 6.35, -0.8)
     plaque.modulate = Color("eccea1")
     add_child(plaque)
 
@@ -62,10 +65,15 @@ func _gate_collision_only() -> void:
     for side in [-1.0, 1.0]:
         var collider := CollisionShape3D.new()
         var box := BoxShape3D.new()
-        box.size = Vector3(1.15, 3.7, 1.6)
+        box.size = Vector3(1.2, 4.8, 1.8)
         collider.shape = box
-        collider.position = Vector3(side * 2.2, 1.85, 0.0)
+        collider.position = Vector3(side * 3.5, 2.4, 0.5)
         body.add_child(collider)
+    # A flush landing joins the textured entrance to the existing street.
+    var masonry := StandardMaterial3D.new()
+    masonry.albedo_color = Color("49443f")
+    masonry.roughness = 1.0
+    _add_block(Vector3(0, 0.015, -3.9), Vector3(6.4, 0.065, 2.1), masonry, false)
 
 func _gate_stones() -> void:
     var masonry := StandardMaterial3D.new()
