@@ -1,12 +1,11 @@
 extends "res://scripts/city_preview.gd"
 
 # ORVETHRA / Forgotten Catacombs: approved 5 small, 7 large, 1 boss layout.
-# One Godot unit = one metre. The clear corridor width stays near 3m.
-# Stone niches/statues are placed into rooms, never inside corridor corners.
-# Static stone geometry is deliberately lightweight until approved Meshy GLBs
-# are decimated and uploaded as actual mobile-ready assets.
-const PASSAGE_WIDTH := 3.5 # 3.5m floor, ~3.0m clear after 0.46m collision walls
-const WALL_HEIGHT := 4.5
+# One Godot unit = one metre. 4m gross = ~3.5m clear with perimeter colliders.
+# Real Meshy pieces are the visible architecture, the procedural stone is only
+# textured mortar/backing around joints and sections without a GLB model.
+const PASSAGE_WIDTH := 4.0 # 4m floor, >3.5m clear between 0.46m collision walls
+const WALL_HEIGHT := 5.0
 const WALL_THICKNESS := 0.46
 const DUNGEON_SPAWN := Vector3(0.0, 0.2, 75.0)
 const CELL := 0.5
@@ -41,6 +40,7 @@ var red_stone: StandardMaterial3D
 var ember: StandardMaterial3D
 var statue_stone: StandardMaterial3D
 var floor_mat: ShaderMaterial
+var masonry_mat: ShaderMaterial
 var room_by_id: Dictionary = {}
 var walkable: Dictionary = {}
 # Optional shared Meshy resources. Absent GLBs fall back to lightweight geometry.
@@ -53,8 +53,30 @@ var meshy_statue: PackedScene
 var meshy_citadel: PackedScene
 var meshy_throne: PackedScene
 var installed_wall_bays := 0
-const MAX_GLB_WALL_BAYS := 24
+const MAX_GLB_WALL_BAYS := 72
 
+const MASONRY_PATTERN := """
+shader_type spatial;
+render_mode cull_disabled;
+varying vec3 wp;
+float rand2(vec2 p) {return fract(sin(dot(p,vec2(17.1,91.37)))*43758.5453);}
+void vertex() { wp=(MODEL_MATRIX*vec4(VERTEX,1.0)).xyz; }
+void fragment(){
+    vec2 uv;
+    // Material appears on both wall orientations, with 1m-ish stone blocks.
+    if(abs(NORMAL.z)>abs(NORMAL.x)) uv=vec2(wp.x,wp.y);
+    else uv=vec2(wp.z,wp.y);
+    uv*=vec2(1.25,1.55);
+    uv.x+=mod(floor(uv.y),2.0)*0.53;
+    vec2 tile=floor(uv);
+    vec2 f=fract(uv);
+    float mortar=smoothstep(0.035,0.065,min(min(f.x,1.0-f.x),min(f.y,1.0-f.y)));
+    float speck=rand2(tile)*0.10+rand2(floor(uv*20.0))*0.02;
+    vec3 brick=mix(vec3(0.22,0.19,0.18),vec3(0.38,0.33,0.30),rand2(tile));
+    ALBEDO=mix(vec3(0.065,0.064,0.070),brick+speck,mortar);
+    ROUGHNESS=1.0;
+}
+"""
 const FLOOR_PATTERN := """
 shader_type spatial;
 render_mode cull_disabled;
@@ -90,6 +112,27 @@ func _ready() -> void:
     add_child(city_hud)
     _update_camera()
 
+func _update_camera() -> void:
+    if camera == null or player == null:
+        return
+    if overview:
+        super._update_camera()
+        return
+    var focus := player.global_position + Vector3(0, 1.45, 0)
+    var direction := Vector3(sin(yaw) * cos(pitch), sin(pitch), cos(yaw) * cos(pitch))
+    var desired := focus + direction * camera_distance
+    var query := PhysicsRayQueryParameters3D.create(focus, desired)
+    query.exclude = [player.get_rid()]
+    var collision := get_world_3d().direct_space_state.intersect_ray(query)
+    if not collision.is_empty():
+        var hit: Vector3 = collision["position"]
+        desired = hit - direction * 0.34
+        if desired.distance_to(focus) < 0.65:
+            desired = focus + direction * 0.65
+    camera.global_position = desired
+    camera.look_at(focus, Vector3.UP)
+
+
 func _dungeon_light() -> void:
     var environment_node := WorldEnvironment.new()
     var environment := Environment.new()
@@ -117,6 +160,7 @@ func _prepare_materials() -> void:
     ember.emission = Color("b84d43")
     ember.emission_energy_multiplier = 1.6
     floor_mat = _make_shader(FLOOR_PATTERN)
+    masonry_mat = _make_shader(MASONRY_PATTERN)
 
 func _load_mobile_meshes() -> void:
     if ResourceLoader.exists(NORMAL_WALL_GLB):
@@ -201,7 +245,7 @@ func _build_corridor(a: Dictionary, b: Dictionary) -> void:
         var midpoint := (start.y + finish.y) * 0.5
         route = [start, Vector2(p.x, midpoint),
             Vector2(q.x, midpoint), finish]
-    # 3.5m gross width preserves roughly 3m walking clearance after wall collision.
+    # 4m gross width preserves more than 3.5m walking clearance after collision.
     # Every link bends because paired room centres are offset 3–4.5m.
     for i in range(route.size() - 1):
         var first: Vector2 = route[i]
@@ -260,7 +304,9 @@ func _emit_wall_segment(edge: int, first: int, last: int, horizontal: bool) -> v
     var location := Vector3(along, WALL_HEIGHT * 0.5, wall_line) if horizontal else Vector3(wall_line, WALL_HEIGHT * 0.5, along)
     var boss_center := Vector2(-17.0, -47.5)
     var near_boss := Vector2(location.x, location.z).distance_to(boss_center) < 18.0
-    _wall_part(location, span, horizontal, red_stone if near_boss else stone)
+    # Textured stone backing covers joins, while Meshy faces stand proud of it.
+    # Collision is kept on the perimeter and independent from the model meshes.
+    _wall_part(location, span, horizontal, masonry_mat)
     _decorate_wall_segment(location, span, horizontal, near_boss)
 
 func _has_adjacent_room(point: Vector2) -> bool:
@@ -290,55 +336,63 @@ func _decorative_mesh(mesh: Mesh, position_3d: Vector3, mat: Material, rotation 
     add_child(visual)
 
 func _decorate_wall_segment(location: Vector3, span: float, horizontal: bool, near_boss: bool) -> void:
-    # Alternate plain wall bays and carved-statue bays. Only the room-side
-    # walls get statues; corridors remain clear of jutting ornamentation.
-    if span < 5.8 or not _has_adjacent_room(Vector2(location.x, location.z)):
+    # Short corridor junctions use a detailed brick shader and no giant statue.
+    # Longer room boundaries are populated by real mobile Meshy wall modules.
+    if span < 3.6 or not _has_adjacent_room(Vector2(location.x, location.z)):
         return
     var inward := _interior_normal(location, horizontal)
     var tangent := Vector3(1, 0, 0) if horizontal else Vector3(0, 0, 1)
-    var count := maxi(1, int(floor(span / 4.2)))
+    var count := maxi(1, int(round(span / 4.25)))
     var step := span / float(count)
     for index in range(count):
         var offset := (float(index) + 0.5) * step - span * 0.5
         var bay := location + tangent * offset
-        if installed_wall_bays < MAX_GLB_WALL_BAYS and _place_meshy_wall_bay(bay, inward, horizontal, step, index, near_boss):
+        var is_statue := (installed_wall_bays + index) % 3 == 1
+        if installed_wall_bays < MAX_GLB_WALL_BAYS and _place_meshy_wall_bay(bay, inward, step, is_statue, near_boss):
             installed_wall_bays += 1
-            continue
-        if index % 2 == 1:
-            _stone_statue(bay, inward, near_boss)
         else:
-            # A simple recessed-looking arch outline on alternating bays.
-            var trim := red_stone if near_boss else border_stone
-            var along_size := Vector3(step * 0.68, 0.22, 0.16) if horizontal else Vector3(0.16, 0.22, step * 0.68)
-            _add_box(bay + inward * 0.245 + Vector3.UP * 1.15,
-                along_size, trim, false)
-            _add_box(bay + inward * 0.245 - Vector3.UP * 1.22,
-                along_size, trim, false)
+            # Models unavailable or mobile draw budget reached: masonry remains
+            # visible and collision-solid, never an untextured grey blocker.
+            var frame := red_stone if near_boss else border_stone
+            var dimensions := Vector3(step * 0.77, 0.22, 0.14) if horizontal else Vector3(0.14, 0.22, step * 0.77)
+            _add_box(bay + inward * 0.255 + Vector3.UP * 1.65, dimensions, frame, false)
 
-func _place_meshy_wall_bay(at: Vector3, inward: Vector3, horizontal: bool, width: float, index: int, near_boss: bool) -> bool:
-    var scene: PackedScene = meshy_statue if index % 2 == 1 else meshy_normal
-    var span := 1.83 if index % 2 == 1 else 1.90
-    var height := 1.67 if index % 2 == 1 else 0.74
-    var depth := 1.86 if index % 2 == 1 else 0.275
-    if near_boss and index % 2 == 0 and meshy_citadel != null:
-        scene = meshy_citadel
-        span = 1.90
-        height = 0.70
-        depth = 0.265
-    if scene == null:
+
+func _place_meshy_wall_bay(at: Vector3, inward: Vector3, width: float, is_statue: bool, near_boss: bool) -> bool:
+    var model_scene: PackedScene = meshy_statue if is_statue else meshy_normal
+    var raw_w := 1.825 if is_statue else 1.900
+    var raw_h := 1.679 if is_statue else 0.749
+    var raw_d := 1.855 if is_statue else 0.271
+    if near_boss and not is_statue and meshy_citadel != null:
+        model_scene = meshy_citadel
+        raw_w = 1.902
+        raw_h = 0.703
+        raw_d = 0.262
+    if model_scene == null:
         return false
-    # Uniform only: never stretch the Meshy statues, carved stone or UVs.
-    var factor := minf(width * 0.92 / span, 4.15 / height)
-    var model := scene.instantiate() as Node3D
-    model.name = "MeshyWallBay_" + str(installed_wall_bays)
-    model.scale = Vector3.ONE * factor
-    model.rotation.y = 0.0 if horizontal else PI * 0.5
-    # Push thickness behind the physical collision wall: max 0.34m on
-    # the room side. This preserves the 3m clear walking corridor.
-    model.position = Vector3(at.x, height * factor * 0.5 + 0.03, at.z)
-    model.position -= inward * (depth * factor * 0.5 - 0.34)
-    add_child(model)
+
+    # Uniform scaling only. Standard walls stack vertically to cover a five
+    # metre perimeter; ornate statuary fills almost the entire height.
+    var rows := 1 if is_statue else 3
+    var scale_factor := minf((width - 0.06) / raw_w, (WALL_HEIGHT - 0.1) / (raw_h * float(rows)))
+    if scale_factor < 0.6:
+        return false
+    var front_depth := raw_d * scale_factor * 0.5
+    # Imported asset faces +Z. Turn it into the room, not through the wall.
+    var orientation := atan2(inward.x, inward.z)
+    for row_index in range(rows):
+        var piece := model_scene.instantiate() as Node3D
+        piece.name = "MeshyWall_%d_%d" % [installed_wall_bays, row_index]
+        piece.rotation.y = orientation
+        piece.scale = Vector3.ONE * scale_factor
+        # All GLBs are centred at Y=0. Their bottom must touch ground.
+        # The front face protrudes 0.43m into the playable area, past the
+        # 0.23m collision half-wall and the recessed brick backing.
+        piece.position = Vector3(at.x, raw_h * scale_factor * (float(row_index) + 0.5) + 0.015, at.z)
+        piece.position += inward * (0.43 - front_depth)
+        add_child(piece)
     return true
+
 
 func _stone_statue(at: Vector3, inward: Vector3, near_boss: bool) -> void:
     # Low-poly sculpted guardian set back into a shallow gothic niche.
@@ -388,24 +442,29 @@ func _room_accents(room: Dictionary) -> void:
         _add_box(Vector3(pos.x - half + 1.05, 0.47, pos.y - half + 1.1), Vector3(1.3, 0.95, 2.0), stone)
 
 func _boss_details() -> void:
-    var pos := Vector3(-17, -0.003, -47.5)
-    var ring := MeshInstance3D.new()
-    var disc := CylinderMesh.new()
-    disc.top_radius = 6.4
-    disc.bottom_radius = 6.4
-    disc.height = 0.045
-    disc.radial_segments = 40
-    ring.mesh = disc
-    ring.position = pos
-    ring.material_override = red_stone
-    add_child(ring)
+    # A thin rune outline instead of an opaque red disc over the floor.
+    var center := Vector3(-17.0, 0.045, -47.5)
+    for i in range(32):
+        var a := TAU * float(i) / 32.0
+        var rune := MeshInstance3D.new()
+        var brick := BoxMesh.new()
+        brick.size = Vector3(1.28, 0.025, 0.095)
+        rune.mesh = brick
+        rune.material_override = ember
+        rune.position = center + Vector3(cos(a) * 6.1, 0, sin(a) * 6.1)
+        rune.rotation.y = -a - PI * 0.5
+        rune.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+        add_child(rune)
     # Keep a completely open fighting centre; the imported hall is a
     # scaled prop at the back, not a replacement for the 25x25m arena.
     if meshy_throne != null:
         var throne := meshy_throne.instantiate() as Node3D
         throne.name = "MeshyDemonicaThrone"
-        throne.scale = Vector3.ONE * 4.0
-        throne.position = Vector3(-17, 2.08, -55.7)
+        # Original GLB bounds 1.862 x 1.016 x 1.898. 6.4x gives a
+        # 12m-wide/6.5m-high structure, partially behind the far wall.
+        # Its front begins at Z=-54, leaving a free central battle arena.
+        throne.scale = Vector3.ONE * 6.4
+        throne.position = Vector3(-17, 3.25, -60.0)
         add_child(throne)
     else:
         # The centre is empty so a later imported Demonica can fight here.
@@ -428,14 +487,6 @@ func _boss_details() -> void:
             crown.height = 0.5
             crown.radial_segments = 10
             _decorative_mesh(crown, Vector3(-17 + sign * 5.5, 4.7, -57.3), statue_stone)
-    var boss_spot := Label3D.new()
-    boss_spot.text = "DEMONICA  ·  ЗАЛ БОССА"
-    boss_spot.font_size = 42
-    boss_spot.pixel_size = 0.012
-    boss_spot.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-    boss_spot.position = Vector3(-17, 2.75, -53)
-    boss_spot.modulate = Color("eebcb8")
-    add_child(boss_spot)
     var light := OmniLight3D.new()
     light.position = Vector3(-17, 3, -50)
     light.omni_range = 16.0
