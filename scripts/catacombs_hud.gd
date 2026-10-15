@@ -23,7 +23,7 @@ func _ready() -> void:
     area_title.add_theme_color_override("font_color", Color("efd3b1"))
     ui_root.add_child(area_title)
     tip = Label.new()
-    tip.text = "Тест геометрии · 5 малых / 7 больших / босс"
+    tip.text = "Готический лабиринт · 12 комнат · Зал Демоники"
     tip.add_theme_font_size_override("font_size", 15)
     tip.add_theme_color_override("font_color", Color("d2c9ba"))
     ui_root.add_child(tip)
