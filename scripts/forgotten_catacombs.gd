@@ -7,28 +7,31 @@ extends "res://scripts/city_preview.gd"
 const PASSAGE_WIDTH := 3.0
 const WALL_HEIGHT := 4.5
 const WALL_THICKNESS := 0.46
-const DUNGEON_SPAWN := Vector3(0.0, 0.2, 53.5)
+const DUNGEON_SPAWN := Vector3(0.0, 0.2, 75.0)
+const CELL := 0.5
 
+# Single mandatory S-shaped progression: every room is on the boss route.
+# Deliberate lateral offsets prevent a rigid grid and force 90-degree turns.
 const ROOMS := [
-    {"id": "small1", "pos": Vector2(0, 53.5), "width": 7.0, "name": "Малая 1"},
-    {"id": "big1", "pos": Vector2(0, 39), "width": 12.0, "name": "Большая 1"},
-    {"id": "big2", "pos": Vector2(-17, 39), "width": 12.0, "name": "Большая 2"},
-    {"id": "big3", "pos": Vector2(17, 39), "width": 12.0, "name": "Большая 3"},
-    {"id": "big4", "pos": Vector2(0, 21.5), "width": 15.0, "name": "Большая 4"},
-    {"id": "big5", "pos": Vector2(-20, 21.5), "width": 15.0, "name": "Большая 5"},
-    {"id": "big6", "pos": Vector2(22.5, 21.5), "width": 20.0, "name": "Большая 6"},
-    {"id": "small2", "pos": Vector2(40, 21.5), "width": 7.0, "name": "Малая 2"},
-    {"id": "small3", "pos": Vector2(-35, 21.5), "width": 7.0, "name": "Малая 3"},
-    {"id": "big7", "pos": Vector2(0, 0), "width": 20.0, "name": "Большая 7"},
-    {"id": "small4", "pos": Vector2(17.5, 0), "width": 7.0, "name": "Малая 4"},
-    {"id": "small5", "pos": Vector2(-17.5, 0), "width": 7.0, "name": "Малая 5"},
-    {"id": "boss", "pos": Vector2(0, -27.5), "width": 25.0, "name": "Зал Демоники"}
+    {"id":"small1", "pos":Vector2(0.0,75.0), "width":7.0, "name":"Малая 1"},
+    {"id":"big1", "pos":Vector2(4.0,61.0), "width":12.0, "name":"Большая 1"},
+    {"id":"big2", "pos":Vector2(-12.5,56.5), "width":12.0, "name":"Большая 2"},
+    {"id":"small2", "pos":Vector2(-16.0,42.0), "width":7.0, "name":"Малая 2"},
+    {"id":"big3", "pos":Vector2(-19.0,28.0), "width":12.0, "name":"Большая 3"},
+    {"id":"big4", "pos":Vector2(-1.0,23.5), "width":15.0, "name":"Большая 4"},
+    {"id":"small3", "pos":Vector2(3.0,7.5), "width":7.0, "name":"Малая 3"},
+    {"id":"big5", "pos":Vector2(-1.0,-8.0), "width":15.0, "name":"Большая 5"},
+    {"id":"big6", "pos":Vector2(21.0,-12.0), "width":20.0, "name":"Большая 6"},
+    {"id":"small4", "pos":Vector2(25.0,-29.5), "width":7.0, "name":"Малая 4"},
+    {"id":"big7", "pos":Vector2(21.0,-47.5), "width":20.0, "name":"Большая 7"},
+    {"id":"small5", "pos":Vector2(3.0,-44.5), "width":7.0, "name":"Малая 5"},
+    {"id":"boss", "pos":Vector2(-17.0,-47.5), "width":25.0, "name":"Зал Демоники"}
 ]
 const LINKS := [
-    ["small1", "big1"], ["big1", "big2"], ["big1", "big3"],
-    ["big1", "big4"], ["big4", "big5"], ["big4", "big6"],
-    ["big5", "small3"], ["big6", "small2"], ["big4", "big7"],
-    ["big7", "small4"], ["big7", "small5"], ["big7", "boss"]
+    ["small1","big1"], ["big1","big2"], ["big2","small2"],
+    ["small2","big3"], ["big3","big4"], ["big4","small3"],
+    ["small3","big5"], ["big5","big6"], ["big6","small4"],
+    ["small4","big7"], ["big7","small5"], ["small5","boss"]
 ]
 
 var stone: StandardMaterial3D
@@ -37,7 +40,7 @@ var red_stone: StandardMaterial3D
 var ember: StandardMaterial3D
 var floor_mat: ShaderMaterial
 var room_by_id: Dictionary = {}
-var openings: Dictionary = {}
+var walkable: Dictionary = {}
 
 const FLOOR_PATTERN := """
 shader_type spatial;
@@ -121,86 +124,122 @@ func _add_box(at: Vector3, dimensions: Vector3, mat: Material, collide: bool = t
     return mesh_node
 
 func _build_map() -> void:
+    # One continuous corridor graph (not a hub with shortcuts).
+    # Rasterize overlapping floor rectangles at 0.5m: outer walls are
+    # generated only at the boundary of their union. This leaves clean
+    # doorways and corners automatically, without invisible blockers.
     for room in ROOMS:
         room_by_id[room["id"]] = room
-        openings[room["id"]] = []
-    for link in LINKS:
-        var a: Dictionary = room_by_id[link[0]]
-        var b: Dictionary = room_by_id[link[1]]
-        var a_pos: Vector2 = a["pos"]
-        var b_pos: Vector2 = b["pos"]
-        var horizontal := absf(a_pos.x - b_pos.x) > absf(a_pos.y - b_pos.y)
-        if horizontal:
-            _open_side(a["id"], "E" if b_pos.x > a_pos.x else "W")
-            _open_side(b["id"], "W" if b_pos.x > a_pos.x else "E")
-        else:
-            _open_side(a["id"], "S" if b_pos.y > a_pos.y else "N")
-            _open_side(b["id"], "N" if b_pos.y > a_pos.y else "S")
-    for room in ROOMS:
         _build_room(room)
     for link in LINKS:
         _build_corridor(room_by_id[link[0]], room_by_id[link[1]])
+    _build_perimeter_walls()
+    for room in ROOMS:
+        _room_accents(room)
     _boss_details()
     _exit_marker()
 
-func _open_side(room_id: String, side: String) -> void:
-    var sides: Array = openings[room_id]
-    sides.append(side)
-    openings[room_id] = sides
+func _paint_floor(at: Vector2, extent: Vector2) -> void:
+    _add_box(Vector3(at.x, -0.13, at.y),
+        Vector3(extent.x, 0.24, extent.y), floor_mat)
+    var ix0 := roundi((at.x - extent.x * 0.5) / CELL)
+    var ix1 := roundi((at.x + extent.x * 0.5) / CELL)
+    var iz0 := roundi((at.y - extent.y * 0.5) / CELL)
+    var iz1 := roundi((at.y + extent.y * 0.5) / CELL)
+    for ix in range(ix0, ix1):
+        for iz in range(iz0, iz1):
+            walkable[Vector2i(ix, iz)] = true
 
 func _build_room(room: Dictionary) -> void:
     var center: Vector2 = room["pos"]
     var width: float = room["width"]
-    var half := width * 0.5
-    var boss_room: bool = room["id"] == "boss"
-    _add_box(Vector3(center.x, -0.13, center.y), Vector3(width, 0.24, width), floor_mat)
-    for side in ["N", "S", "E", "W"]:
-        var has_door := (openings[room["id"]] as Array).has(side)
-        if side == "N" or side == "S":
-            var wall_z := center.y + (-half if side == "N" else half)
-            _place_wall(Vector3(center.x, WALL_HEIGHT * 0.5, wall_z), width, true, has_door, red_stone if boss_room else stone)
-        else:
-            var wall_x := center.x + (-half if side == "W" else half)
-            _place_wall(Vector3(wall_x, WALL_HEIGHT * 0.5, center.y), width, false, has_door, red_stone if boss_room else stone)
-    _room_accents(room)
-
-func _place_wall(center: Vector3, span: float, horizontal: bool, has_door: bool, material: Material) -> void:
-    if not has_door:
-        _wall_part(center, span, horizontal, material)
-        return
-    var side_len := (span - PASSAGE_WIDTH - 0.2) * 0.5
-    if side_len <= 0.0:
-        return
-    var offset := PASSAGE_WIDTH * 0.5 + 0.1 + side_len * 0.5
-    var axis := Vector3(1, 0, 0) if horizontal else Vector3(0, 0, 1)
-    _wall_part(center - axis * offset, side_len, horizontal, material)
-    _wall_part(center + axis * offset, side_len, horizontal, material)
-
-func _wall_part(at: Vector3, span: float, horizontal: bool, material: Material) -> void:
-    var dims := Vector3(span, WALL_HEIGHT, WALL_THICKNESS) if horizontal else Vector3(WALL_THICKNESS, WALL_HEIGHT, span)
-    _add_box(at, dims, material)
+    _paint_floor(center, Vector2(width, width))
 
 func _build_corridor(a: Dictionary, b: Dictionary) -> void:
     var p: Vector2 = a["pos"]
     var q: Vector2 = b["pos"]
     var a_half: float = float(a["width"]) * 0.5
     var b_half: float = float(b["width"]) * 0.5
-    if absf(p.x - q.x) > absf(p.y - q.y):
-        var left := (p.x + a_half) if p.x < q.x else (q.x + b_half)
-        var right := (q.x - b_half) if p.x < q.x else (p.x - a_half)
-        var length := right - left
-        var mid := (left + right) * 0.5
-        _add_box(Vector3(mid, -0.13, p.y), Vector3(length + 0.2, 0.24, PASSAGE_WIDTH), floor_mat)
-        for side in [-1.0, 1.0]:
-            _wall_part(Vector3(mid, WALL_HEIGHT * 0.5, p.y + side * (PASSAGE_WIDTH * 0.5 + 0.21)), length, true, stone)
+    var horizontal := absf(p.x - q.x) > absf(p.y - q.y)
+    var route: Array[Vector2] = []
+    if horizontal:
+        var direction := 1.0 if q.x > p.x else -1.0
+        var start := Vector2(p.x + direction * a_half, p.y)
+        var finish := Vector2(q.x - direction * b_half, q.y)
+        var midpoint := (start.x + finish.x) * 0.5
+        route = [start, Vector2(midpoint, p.y),
+            Vector2(midpoint, q.y), finish]
     else:
-        var near := (p.y + a_half) if p.y < q.y else (q.y + b_half)
-        var far := (q.y - b_half) if p.y < q.y else (p.y - a_half)
-        var length := far - near
-        var mid := (near + far) * 0.5
-        _add_box(Vector3(p.x, -0.13, mid), Vector3(PASSAGE_WIDTH, 0.24, length + 0.2), floor_mat)
-        for side in [-1.0, 1.0]:
-            _wall_part(Vector3(p.x + side * (PASSAGE_WIDTH * 0.5 + 0.21), WALL_HEIGHT * 0.5, mid), length, false, stone)
+        var direction := 1.0 if q.y > p.y else -1.0
+        var start := Vector2(p.x, p.y + direction * a_half)
+        var finish := Vector2(q.x, q.y - direction * b_half)
+        var midpoint := (start.y + finish.y) * 0.5
+        route = [start, Vector2(p.x, midpoint),
+            Vector2(q.x, midpoint), finish]
+    # 3m-wide L/S-jog corridors, 4–5m between room boundaries.
+    # Every link bends because paired room centres are offset 3–4.5m.
+    for i in range(route.size() - 1):
+        var first: Vector2 = route[i]
+        var second: Vector2 = route[i + 1]
+        if is_equal_approx(first.x, second.x):
+            _paint_floor((first + second) * 0.5,
+                Vector2(PASSAGE_WIDTH, absf(first.y - second.y) + PASSAGE_WIDTH))
+        else:
+            _paint_floor((first + second) * 0.5,
+                Vector2(absf(first.x - second.x) + PASSAGE_WIDTH, PASSAGE_WIDTH))
+
+func _build_perimeter_walls() -> void:
+    var north_south: Dictionary = {}
+    var east_west: Dictionary = {}
+    for key in walkable:
+        var tile: Vector2i = key
+        if not walkable.has(tile + Vector2i(-1, 0)):
+            _add_edge(north_south, tile.x, tile.y)
+        if not walkable.has(tile + Vector2i(1, 0)):
+            _add_edge(north_south, tile.x + 1, tile.y)
+        if not walkable.has(tile + Vector2i(0, -1)):
+            _add_edge(east_west, tile.y, tile.x)
+        if not walkable.has(tile + Vector2i(0, 1)):
+            _add_edge(east_west, tile.y + 1, tile.x)
+    _emit_edges(north_south, false)
+    _emit_edges(east_west, true)
+
+func _add_edge(groups: Dictionary, edge: int, index: int) -> void:
+    if not groups.has(edge):
+        groups[edge] = []
+    var segments: Array = groups[edge]
+    segments.append(index)
+
+func _emit_edges(groups: Dictionary, horizontal: bool) -> void:
+    for edge in groups:
+        var segments: Array = groups[edge]
+        segments.sort()
+        if segments.is_empty():
+            continue
+        var start: int = segments[0]
+        var last: int = start
+        for i in range(1, segments.size()):
+            var tile: int = segments[i]
+            if tile == last + 1:
+                last = tile
+            else:
+                _emit_wall_segment(edge, start, last, horizontal)
+                start = tile
+                last = tile
+        _emit_wall_segment(edge, start, last, horizontal)
+
+func _emit_wall_segment(edge: int, first: int, last: int, horizontal: bool) -> void:
+    var span := float(last - first + 1) * CELL
+    var along := float(first + last + 1) * 0.5 * CELL
+    var wall_line := float(edge) * CELL
+    var location := Vector3(along, WALL_HEIGHT * 0.5, wall_line) if horizontal else Vector3(wall_line, WALL_HEIGHT * 0.5, along)
+    var boss_center := Vector2(-17.0, -47.5)
+    var near_boss := Vector2(location.x, location.z).distance_to(boss_center) < 18.0
+    _wall_part(location, span, horizontal, red_stone if near_boss else stone)
+
+func _wall_part(at: Vector3, span: float, horizontal: bool, material: Material) -> void:
+    var dimensions := Vector3(span, WALL_HEIGHT, WALL_THICKNESS) if horizontal else Vector3(WALL_THICKNESS, WALL_HEIGHT, span)
+    _add_box(at, dimensions, material)
 
 func _room_accents(room: Dictionary) -> void:
     var pos: Vector2 = room["pos"]
@@ -216,7 +255,7 @@ func _room_accents(room: Dictionary) -> void:
         _add_box(Vector3(pos.x - half + 1.05, 0.47, pos.y - half + 1.1), Vector3(1.3, 0.95, 2.0), stone)
 
 func _boss_details() -> void:
-    var pos := Vector3(0, -0.003, -27.5)
+    var pos := Vector3(-17, -0.003, -47.5)
     var ring := MeshInstance3D.new()
     var disc := CylinderMesh.new()
     disc.top_radius = 6.4
@@ -228,17 +267,17 @@ func _boss_details() -> void:
     ring.material_override = red_stone
     add_child(ring)
     # The centre is empty so a later imported Demonica can fight here.
-    _add_box(Vector3(0, 0.48, -39.0), Vector3(4.6, 0.95, 1.65), border_stone)
+    _add_box(Vector3(-17, 0.48, -59.0), Vector3(4.6, 0.95, 1.65), border_stone)
     var boss_spot := Label3D.new()
     boss_spot.text = "DEMONICA  ·  ЗАЛ БОССА"
     boss_spot.font_size = 42
     boss_spot.pixel_size = 0.012
     boss_spot.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-    boss_spot.position = Vector3(0, 2.75, -33)
+    boss_spot.position = Vector3(-17, 2.75, -53)
     boss_spot.modulate = Color("eebcb8")
     add_child(boss_spot)
     var light := OmniLight3D.new()
-    light.position = Vector3(0, 3, -31)
+    light.position = Vector3(-17, 3, -50)
     light.omni_range = 16.0
     light.light_energy = 0.85
     light.light_color = Color("d06360")
@@ -251,7 +290,7 @@ func _exit_marker() -> void:
     plaque.font_size = 40
     plaque.pixel_size = 0.012
     plaque.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-    plaque.position = Vector3(0, 2.4, 56.2)
+    plaque.position = Vector3(0, 2.4, 77.0)
     plaque.modulate = Color("edd2a0")
     add_child(plaque)
 
