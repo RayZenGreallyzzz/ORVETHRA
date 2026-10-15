@@ -14,6 +14,7 @@ var quest_button: Button
 var map_header: Label
 var map_button: Button
 var menu_button: Button
+var catacomb_entry: Button
 var chat_button: Button
 var chat_label: Label
 var attack_button: Button
@@ -130,6 +131,9 @@ func _ready() -> void:
     map_button.pressed.connect(func() -> void: game._toggle_overview())
     menu_button = _button("☰")
     menu_button.pressed.connect(_open_menu)
+    catacomb_entry = _button("Войти в Забытые катакомбы")
+    catacomb_entry.visible = false
+    catacomb_entry.pressed.connect(func() -> void: game._enter_catacombs())
 
     joystick = JoystickControl.new()
     joystick.name = "AnalogueMovement"
@@ -214,6 +218,8 @@ func _layout() -> void:
     map_button.size = minimap.size
     menu_button.position = Vector2(screen.x - 55, 7)
     menu_button.size = Vector2(46, 44)
+    catacomb_entry.position = Vector2((screen.x - 310.0) * 0.5, screen.y - 143.0)
+    catacomb_entry.size = Vector2(310, 47)
     joystick.position = Vector2(19, screen.y - 234)
     joystick.size = Vector2(176, 176)
     chat_button.position = Vector2(16, screen.y - 48)
@@ -275,6 +281,7 @@ func _process(delta: float) -> void:
         return
     refresh_time = 0.0
     minimap.refresh(Vector2(game.player.position.x, game.player.position.z), game.player.rotation.y)
+    catacomb_entry.visible = game._catacombs_is_near() and not is_popup_open()
     if not quest_complete and Vector2(game.player.position.x, game.player.position.z).length() < 5.9:
         quest_complete = true
         _refresh_quest()
