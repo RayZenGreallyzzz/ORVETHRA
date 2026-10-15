@@ -9,8 +9,8 @@ const CITY_PORTAL_POINT := Vector2(86.7, 89.5)
 func _ready() -> void:
     # Align the gateway with the road from (78,78) toward (90,94).
     # City playfield ends at Z=93, so the gate sits on its centreline.
-    position = Vector3(89.25, 0.0, 93.0)
-    rotation.y = atan2(12.0, 16.0)
+    position = Vector3(90.0, 0.0, 94.0)
+    rotation.y = atan2(12.0, 16.0) # Road direction to the NE end; local -Z points back to street
     # The real Meshy crypt wins when the optional asset ZIP is installed.
     if ResourceLoader.exists(MOBILE_CRYPT):
         var asset: Resource = load(MOBILE_CRYPT)
@@ -23,6 +23,9 @@ func _ready() -> void:
             # the 8.8m cobbled street without distorting statues or arches.
             crypt.scale = Vector3.ONE * 4.6
             crypt.position = Vector3(0, 2.88, 0.0)
+            # The imported GLB facade looks toward +Z. Face the gate and
+            # stairs down the approved road, which approaches from local -Z.
+            crypt.rotation.y = PI
             add_child(crypt)
             _gate_collision_only()
         else:
@@ -71,9 +74,12 @@ func _gate_collision_only() -> void:
         body.add_child(collider)
     # A flush landing joins the textured entrance to the existing street.
     var masonry := StandardMaterial3D.new()
-    masonry.albedo_color = Color("49443f")
+    masonry.albedo_color = Color("77716b")
+    masonry.albedo_texture = load("res://assets/catacombs/tiles/floor_stone_mobile.webp") as Texture2D
+    masonry.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+    masonry.uv1_scale = Vector3(2.8, 1.0, 2.5)
     masonry.roughness = 1.0
-    _add_block(Vector3(0, 0.015, -3.9), Vector3(6.4, 0.065, 2.1), masonry, false)
+    _add_block(Vector3(0, -0.045, -2.9), Vector3(7.6, 0.08, 5.7), masonry, false)
 
 func _gate_stones() -> void:
     var masonry := StandardMaterial3D.new()
