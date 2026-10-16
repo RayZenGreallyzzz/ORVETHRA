@@ -289,7 +289,9 @@ func _process(delta: float) -> void:
     refresh_time = 0.0
     minimap.refresh(Vector2(game.player.position.x, game.player.position.z), game.player.rotation.y)
     catacomb_entry.visible = game._catacombs_is_near() and not is_popup_open()
-    greg_interact.visible = game._can_greg_offer_quest() and not is_popup_open()
+    greg_interact.visible = game._can_greg_interact() and not is_popup_open()
+    if greg_interact.visible:
+        greg_interact.text = "!  Задание Грега" if game._greg_quest_available() else "Поговорить с Грегом"
     if not quest_complete and Vector2(game.player.position.x, game.player.position.z).length() < 5.9:
         quest_complete = true
         _refresh_quest()
@@ -311,8 +313,8 @@ func _popup_button(label: String, action: Callable) -> void:
 func _refresh_quest() -> void:
     var fountains := "1/1" if quest_complete else "0/1"
     quest_button.text = "!  Первые шаги\nФонтан " + fountains + "  ·  Слизни " + str(mini(training_kills, 3)) + "/3"
-    if greg_quest_started:
-        quest_button.text = "!  Грег: найти катакомбы\n" + quest_button.text
+    if game != null and game._greg_quest_active():
+        quest_button.text = "!  Сопроводи Грега к дозорному повороту\n" + quest_button.text
 
 func on_training_kill(level: int) -> void:
     training_kills += 1
@@ -351,34 +353,48 @@ func _open_quest() -> void:
     _show_popup()
     popup_heading.text = "Журнал заданий"
     popup_description.text = "Первые шаги: найдите фонтан (" + ("1/1" if quest_complete else "0/1") + ")\nТренировочный бой: слизни " + str(mini(training_kills, 3)) + "/3\nВиды: Lv.1 — " + str(kills_by_level[1]) + ", Lv.5 — " + str(kills_by_level[5]) + ", Lv.10 — " + str(kills_by_level[10])
-    if greg_quest_started:
-        popup_description.text += "\n\nГрег: найди вход в катакомбы у конца северо-восточной дороги."
+    if game != null and game._greg_quest_active():
+        popup_description.text += "\n\nГрег: ведите его к повороту северо-восточной дороги (78, 78). Он идёт рядом, не отрывайтесь слишком далеко."
+    elif game != null:
+        popup_description.text += "\n\nГрег: " + game._greg_cooldown_text()
     _clear_popup_actions()
     _popup_button("Показать тренировочную площадку на карте", _switch_map)
     _popup_button("Закрыть", _close_popup)
 
 func _open_greg_quest() -> void:
-    # Greg can be interacted with ONLY while resting beside the fountain.
-    if not game._can_greg_offer_quest():
-        show_combat_message("Грег ушёл гулять. Дождитесь его у фонтана.")
+    if not game._can_greg_interact():
+        show_combat_message("Грег сейчас далеко. Подойдите к нему поближе.")
         return
     _show_popup()
-    popup_heading.text = "Грег · Странник"
-    popup_description.text = "Слушай, путник. Я вернулся к фонтану ненадолго.\n" + \
-        "Есть работа: найди вход в Забытые катакомбы на краю города."
+    popup_heading.text = "Грег · Странствующий NPC"
     _clear_popup_actions()
-    _popup_button("Принять поручение", _accept_greg_quest)
-    _popup_button("Пока не сейчас", _close_popup)
+    if game._greg_quest_active():
+        popup_description.text = "Идём к дозорному повороту на северо-восточной дороге.\n" + \
+            "Не убегай далеко: я буду следовать за тобой по городским улицам."
+    elif game._greg_quest_available():
+        popup_description.text = "Привет, путник! Есть работа: проводи меня\n" + \
+            "к северо-восточной дозорной дороге, неподалёку от катакомб.\n" + \
+            "После принятия поручения следующий квест появится через 3 часа."
+        _popup_button("Начать сопровождение", _accept_greg_quest)
+    else:
+        popup_description.text = "Грег отдыхает от своих поручений.\n" + game._greg_cooldown_text()
+    _popup_button("Закрыть", _close_popup)
 
 
 func _accept_greg_quest() -> void:
     if game._accept_greg_quest():
         greg_quest_started = true
-        show_combat_message("Грег: задание получено — найди вход в катакомбы!")
+        show_combat_message("Квест Грега: сопроводите его к дозорному повороту!")
         _refresh_quest()
     else:
-        show_combat_message("Грег снова в пути. Поговорим у фонтана.")
+        show_combat_message("Сейчас поручение недоступно. " + game._greg_cooldown_text())
     _close_popup()
+
+
+func on_greg_escort_complete() -> void:
+    greg_quest_started = false
+    _refresh_quest()
+    show_combat_message("Сопровождение выполнено! Грег благодарит за помощь.")
 
 
 func _open_menu() -> void:
