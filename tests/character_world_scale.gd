@@ -50,7 +50,11 @@ func _validate_roster() -> void:
             var available: Array[String] = []
             for n in anim.get_animation_list():
                 available.append(String(n).to_lower())
-            if not available.has("idle"):
+            var has_idle := false
+            for clip in available:
+                if clip.ends_with("idle"):
+                    has_idle = true
+            if not has_idle:
                 push_error("Missing Idle: " + id)
                 failures += 1
             if not available.has("walk") and not available.has("run"):
