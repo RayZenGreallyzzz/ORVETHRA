@@ -36,7 +36,7 @@ var roads: Array[PackedVector2Array] = []
 var hero_visual: Node3D
 var hero_anim: AnimationPlayer
 var hero_animation := ""
-var greg_npc: CharacterBody3D
+var greg_npc
 
 const STONE_SHADER := """
 shader_type spatial;
