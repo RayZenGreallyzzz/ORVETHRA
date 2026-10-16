@@ -29,3 +29,29 @@ static func get_entry(id: String) -> Dictionary:
 
 static func default_id() -> String:
     return "neonalleycat"
+
+
+# Verified source GLB mesh POSITION heights, measured before any armature
+# transforms. Almost all are already 1.9m, while eight GLBs have a 0.01
+# Armature hierarchy compensated by skin inverse-bind matrices. Do NOT
+# magnify them 100x by measuring imported MeshInstance AABBs.
+const SOURCE_HEIGHT_METRES := {
+    "neonalleycat": 1.900,
+    "dododog": 1.900,
+    "kwnips_baby": 1.874,
+    "meerkat_baby": 1.900,
+    "meerkat": 1.900,
+    "kwnips": 1.878,
+    "badboy": 1.893,
+    "bunny": 1.898,
+    "graffitialleycat": 1.894,
+    "crimsondrakeshadow_lizard": 1.898
+}
+
+static func world_scale(id: String) -> float:
+    # A consistent 1.90m body, preserving every character's proportions.
+    # The source's skeletal transforms already handle original GLB units.
+    return 1.9 / float(SOURCE_HEIGHT_METRES.get(id, 1.9))
+
+static func target_height_metres() -> float:
+    return 1.9
