@@ -10,6 +10,7 @@ const HERO_FALLBACK_PATH := "res://assets/characters/ORVETHRA_NeonAlleycat_Anima
 const FountainMobile = preload("res://scripts/fountain_mobile.gd")
 const TrainingField = preload("res://scripts/city_training.gd")
 const CryptEntrance = preload("res://scripts/city_catacombs_entrance.gd")
+const GregNPC = preload("res://scripts/city_greg_npc.gd")
 var player: CharacterBody3D
 var camera: Camera3D
 var yaw := 0.0
@@ -35,6 +36,7 @@ var roads: Array[PackedVector2Array] = []
 var hero_visual: Node3D
 var hero_anim: AnimationPlayer
 var hero_animation := ""
+var greg_npc: CharacterBody3D
 
 const STONE_SHADER := """
 shader_type spatial;
@@ -89,6 +91,7 @@ func _ready() -> void:
     _ground()
     _layout()
     FountainMobile.add_to(self)
+    _greg_city_npc()
     _training_area()
     _catacomb_entrance()
     _player()
@@ -409,7 +412,10 @@ func _normalize_hero_visual() -> void:
     hero_visual.scale = Vector3.ONE * ratio
     # Mesh vertex Y bounds are around -0.95..+0.95; move their midpoint
     # to half the playable height so feet land on the city floor.
-    hero_visual.position = Vector3(0.0, CharacterRoster.target_height_metres() * 0.5 + 0.055, 0.0)
+    # Position feet at street height: visual origin is the model midpoint,
+    # while the CharacterBody's floor contact sits roughly 7cm below the
+    # rendered cobblestone. Keep local offset fixed under animation.
+    hero_visual.position = Vector3(0.0, CharacterRoster.target_height_metres() * 0.5 + 0.10, 0.0)
     print("ORVETHRA hero: ", id, " target height: ",
         CharacterRoster.target_height_metres(), "m scale: ", ratio)
 
@@ -430,9 +436,9 @@ func _player() -> void:
     var collision := CollisionShape3D.new()
     var shape := CapsuleShape3D.new()
     shape.radius = 0.35
-    shape.height = 1.8
+    shape.height = CharacterRoster.target_height_metres()
     collision.shape = shape
-    collision.position.y = 0.93
+    collision.position.y = shape.height * 0.5
     player.add_child(collision)
 
     # The player picks one of the nine test GLB heroes in the main menu.
@@ -571,6 +577,24 @@ func _update_camera() -> void:
         var direction := Vector3(sin(yaw) * cos(pitch), sin(pitch), cos(yaw) * cos(pitch))
         camera.global_position = focus + direction * camera_distance
         camera.look_at(focus, Vector3.UP)
+
+func _greg_city_npc() -> void:
+    # BadBoy is not a playable hero: he rests near the central fountain
+    # before following a simple walk/idle route through the streets.
+    greg_npc = GregNPC.new()
+    add_child(greg_npc)
+
+
+func _can_greg_offer_quest() -> bool:
+    return (not overview and player != null and greg_npc != null
+        and greg_npc.can_give_quest(player.global_position))
+
+
+func _accept_greg_quest() -> bool:
+    if not _can_greg_offer_quest():
+        return false
+    return greg_npc.accept_quest(player.global_position)
+
 
 func _catacomb_entrance() -> void:
     var crypt := CryptEntrance.new()
