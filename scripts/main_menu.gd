@@ -280,10 +280,10 @@ func _show_roster(box: VBoxContainer) -> void:
     fill_light.light_energy = 0.58
     scene_root.add_child(fill_light)
     var display_camera := Camera3D.new()
-    display_camera.position = Vector3(0.0, 1.4, 4.8)
+    display_camera.position = Vector3(0.0, 1.28, 3.55)
     display_camera.fov = 48
     scene_root.add_child(display_camera)
-    display_camera.look_at(Vector3(0, 1.2, 0), Vector3.UP)
+    display_camera.look_at(Vector3(0, 1.12, 0), Vector3.UP)
     display_camera.current = true
 
     roster_selected_label = Label.new()
@@ -327,23 +327,12 @@ func _select_roster(id: String) -> void:
     _start_preview_idle(scene)
     # Source GLBs have Z-up bind meshes, even though their animation bones
     # stand vertically. Using only local Y made the preview a giant face/legs.
-    # Measure the longest bind-mesh axis and uniformly fit a 2.2m showcase.
-    var corners: Array[Vector3] = []
-    _collect_preview_points(scene, corners)
-    if not corners.is_empty():
-        var low := Vector3(INF, INF, INF)
-        var high := Vector3(-INF, -INF, -INF)
-        for point in corners:
-            low = low.min(point)
-            high = high.max(point)
-        var size := high - low
-        var max_dimension := maxf(size.x, maxf(size.y, size.z))
-        if max_dimension > 0.000001:
-            var scale_factor := clampf(2.2 / max_dimension, 0.005, 280.0)
-            scene.scale = Vector3.ONE * scale_factor
-            scene.position = Vector3(-0.5 * (low.x + high.x) * scale_factor,
-                1.23 - 0.5 * (low.y + high.y) * scale_factor,
-                -0.5 * (low.z + high.z) * scale_factor)
+    # Same verified 1.9m scale as the actual playable character.
+    # Never normalize against a Mixamo root AABB of 0.019m: the
+    # animated skinned mesh already covers roughly 1.9 world metres.
+    scene.scale = Vector3.ONE * CharacterRoster.world_scale(id)
+    scene.position = Vector3(0.0, CharacterRoster.target_height_metres() * 0.5 + 0.055, 0.0)
+    scene.rotation.y = PI
 
 
 func _collect_preview_points(node: Node, corners: Array[Vector3]) -> void:
