@@ -51,7 +51,10 @@ func _ready() -> void:
             # Rigged mesh is already measured in world metres. Never use
             # imported 0.019m AABBs or magnify it 100x.
             model.scale = Vector3.ONE * CharacterRoster.world_scale("badboy")
-            model.position.y = CharacterRoster.target_height_metres() * 0.5 + 0.10
+            # Measured animated toe bones are already at local Y=0.
+            # City road artwork is ~0.08m higher than the physics ground.
+            # Do not add half the NPC's body height (caused the floating Greg).
+            model.position.y = 0.08
             add_child(model)
             anim_player = _find_animation_player(model)
             if anim_player != null:
