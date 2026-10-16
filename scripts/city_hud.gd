@@ -15,6 +15,8 @@ var map_header: Label
 var map_button: Button
 var menu_button: Button
 var catacomb_entry: Button
+var greg_interact: Button
+var greg_quest_started := false
 var chat_button: Button
 var chat_label: Label
 var attack_button: Button
@@ -134,6 +136,9 @@ func _ready() -> void:
     catacomb_entry = _button("Войти в Забытые катакомбы")
     catacomb_entry.visible = false
     catacomb_entry.pressed.connect(func() -> void: game._enter_catacombs())
+    greg_interact = _button("!  Поговорить с Грегом")
+    greg_interact.visible = false
+    greg_interact.pressed.connect(_open_greg_quest)
 
     joystick = JoystickControl.new()
     joystick.name = "AnalogueMovement"
@@ -220,6 +225,8 @@ func _layout() -> void:
     menu_button.size = Vector2(46, 44)
     catacomb_entry.position = Vector2((screen.x - 310.0) * 0.5, screen.y - 143.0)
     catacomb_entry.size = Vector2(310, 47)
+    greg_interact.position = Vector2((screen.x - 290.0) * 0.5, screen.y - 143.0)
+    greg_interact.size = Vector2(290, 47)
     joystick.position = Vector2(19, screen.y - 234)
     joystick.size = Vector2(176, 176)
     chat_button.position = Vector2(16, screen.y - 48)
@@ -282,6 +289,7 @@ func _process(delta: float) -> void:
     refresh_time = 0.0
     minimap.refresh(Vector2(game.player.position.x, game.player.position.z), game.player.rotation.y)
     catacomb_entry.visible = game._catacombs_is_near() and not is_popup_open()
+    greg_interact.visible = game._can_greg_offer_quest() and not is_popup_open()
     if not quest_complete and Vector2(game.player.position.x, game.player.position.z).length() < 5.9:
         quest_complete = true
         _refresh_quest()
@@ -303,6 +311,8 @@ func _popup_button(label: String, action: Callable) -> void:
 func _refresh_quest() -> void:
     var fountains := "1/1" if quest_complete else "0/1"
     quest_button.text = "!  Первые шаги\nФонтан " + fountains + "  ·  Слизни " + str(mini(training_kills, 3)) + "/3"
+    if greg_quest_started:
+        quest_button.text = "!  Грег: найти катакомбы\n" + quest_button.text
 
 func on_training_kill(level: int) -> void:
     training_kills += 1
@@ -341,9 +351,35 @@ func _open_quest() -> void:
     _show_popup()
     popup_heading.text = "Журнал заданий"
     popup_description.text = "Первые шаги: найдите фонтан (" + ("1/1" if quest_complete else "0/1") + ")\nТренировочный бой: слизни " + str(mini(training_kills, 3)) + "/3\nВиды: Lv.1 — " + str(kills_by_level[1]) + ", Lv.5 — " + str(kills_by_level[5]) + ", Lv.10 — " + str(kills_by_level[10])
+    if greg_quest_started:
+        popup_description.text += "\n\nГрег: найди вход в катакомбы у конца северо-восточной дороги."
     _clear_popup_actions()
     _popup_button("Показать тренировочную площадку на карте", _switch_map)
     _popup_button("Закрыть", _close_popup)
+
+func _open_greg_quest() -> void:
+    # Greg can be interacted with ONLY while resting beside the fountain.
+    if not game._can_greg_offer_quest():
+        show_combat_message("Грег ушёл гулять. Дождитесь его у фонтана.")
+        return
+    _show_popup()
+    popup_heading.text = "Грег · Странник"
+    popup_description.text = "Слушай, путник. Я вернулся к фонтану ненадолго.\n" + \
+        "Есть работа: найди вход в Забытые катакомбы на краю города."
+    _clear_popup_actions()
+    _popup_button("Принять поручение", _accept_greg_quest)
+    _popup_button("Пока не сейчас", _close_popup)
+
+
+func _accept_greg_quest() -> void:
+    if game._accept_greg_quest():
+        greg_quest_started = true
+        show_combat_message("Грег: задание получено — найди вход в катакомбы!")
+        _refresh_quest()
+    else:
+        show_combat_message("Грег снова в пути. Поговорим у фонтана.")
+    _close_popup()
+
 
 func _open_menu() -> void:
     _show_popup()
