@@ -1,4 +1,4 @@
-name: ORVETHRA 175cm Grounded Heroes and Greg v0.21
+name: ORVETHRA Wandering Greg Escort Quests v0.22
 
 on:
   push:
@@ -146,6 +146,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ORVETHRA-Grounded-Heroes-v021-Android
+          name: ORVETHRA-Greg-Escort-v022-Android
           path: build/ORVETHRA-IT801C-debug.apk
           retention-days: 14
