@@ -584,21 +584,43 @@ func _update_camera() -> void:
         camera.look_at(focus, Vector3.UP)
 
 func _greg_city_npc() -> void:
-    # BadBoy is not a playable hero: he rests near the central fountain
-    # before following a simple walk/idle route through the streets.
+    # Greg uses the city's existing paved road network for wandering.
+    # Player quests and cooldown are saved separately from hero selection.
     greg_npc = GregNPC.new()
+    greg_npc.game = self
     add_child(greg_npc)
 
 
-func _can_greg_offer_quest() -> bool:
+func _can_greg_interact() -> bool:
     return (not overview and player != null and greg_npc != null
-        and greg_npc.can_give_quest(player.global_position))
+        and greg_npc.can_interact(player.global_position))
+
+
+func _can_greg_offer_quest() -> bool:
+    return _can_greg_interact() and greg_npc.can_give_quest(player.global_position)
+
+
+func _greg_quest_active() -> bool:
+    return greg_npc != null and greg_npc.escort_active
+
+
+func _greg_quest_available() -> bool:
+    return greg_npc != null and greg_npc.can_offer_quest()
+
+
+func _greg_cooldown_text() -> String:
+    return greg_npc.cooldown_text() if greg_npc != null else "Грег сейчас недоступен."
 
 
 func _accept_greg_quest() -> bool:
     if not _can_greg_offer_quest():
         return false
     return greg_npc.accept_quest(player.global_position)
+
+
+func _on_greg_escort_complete() -> void:
+    if city_hud != null:
+        city_hud.on_greg_escort_complete()
 
 
 func _catacomb_entrance() -> void:
