@@ -10,7 +10,6 @@ const ENTRIES := [
     {"id":"meerkat_baby", "title":"Мира Песчаная Искра", "species":"Сурикат", "role":"Песчаная следопытка", "gender":"Самка", "clip":"Walk"},
     {"id":"meerkat", "title":"Тарек Песчаный Клык", "species":"Сурикат", "role":"Страж пустыни", "gender":"Самец", "clip":"Walk"},
     {"id":"kwnips", "title":"Кворн Грозолап", "species":"Квнипс", "role":"Грозовой маг", "gender":"Самец", "clip":"Walk"},
-    {"id":"badboy", "title":"Рокхар Беззаконник", "species":"Бунтарь", "role":"Тёмный дуэлянт", "gender":"Самец", "clip":"Walk"},
     {"id":"bunny", "title":"Лунар Серебролап", "species":"Лунный зверолюд", "role":"Ловкий боец", "gender":"Самец", "clip":"Run"},
     {"id":"graffitialleycat", "title":"Граффит Ночной Коготь", "species":"Уличный кот", "role":"Теневой клинок", "gender":"Самец", "clip":"Run"},
     {"id":"crimsondrakeshadow_lizard", "title":"Кримзар Тенедракон", "species":"Драконид", "role":"Багровый воин", "gender":"Самец", "clip":"Run"}
@@ -49,9 +48,9 @@ const SOURCE_HEIGHT_METRES := {
 }
 
 static func world_scale(id: String) -> float:
-    # A consistent 1.90m body, preserving every character's proportions.
+    # A consistent 1.75m world-height body, preserving proportions.
     # The source's skeletal transforms already handle original GLB units.
-    return 1.9 / float(SOURCE_HEIGHT_METRES.get(id, 1.9))
+    return target_height_metres() / float(SOURCE_HEIGHT_METRES.get(id, 1.9))
 
 static func target_height_metres() -> float:
-    return 1.9
+    return 1.75
