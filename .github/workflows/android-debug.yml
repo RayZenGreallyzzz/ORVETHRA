@@ -1,4 +1,4 @@
-name: ORVETHRA Correct Hero Height v0.20
+name: ORVETHRA Greg NPC and 175cm Heroes v0.20
 
 on:
   push:
@@ -138,6 +138,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ORVETHRA-Hero-190cm-v020-Android
+          name: ORVETHRA-Greg-NPC-175cm-v020-Android
           path: build/ORVETHRA-IT801C-debug.apk
           retention-days: 14
