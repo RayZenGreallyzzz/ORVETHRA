@@ -6,6 +6,12 @@ extends Node3D
 const MOBILE_CRYPT := "res://assets/catacombs/crypt_entrance_mobile.glb"
 const CITY_PORTAL_POINT := Vector2(86.7, 89.5)
 
+# The GLB has a raised, irregular rubble foundation. Snapping its absolute
+# lowest AABB corner to the road keeps the ENTRANCE PLATFORM visually elevated.
+# Bury the foundation into the cobbles while retaining the architecture.
+const COBBLE_SURFACE_Y := 0.008
+const CRYPT_FOUNDATION_BURY := 0.55
+
 func _ready() -> void:
     # Align the gateway with the road from (78,78) toward (90,94).
     # City playfield ends at Z=93, so the gate sits on its centreline.
@@ -27,13 +33,17 @@ func _ready() -> void:
             # stairs down the approved road, which approaches from local -Z.
             crypt.rotation.y = PI
             add_child(crypt)
-            # Align actual imported geometry to the road, not a guessed +2.88m.
+            # Snap to the real pavement and embed the bulky foundation beneath it.
+            # Simply aligning the lowest vertex left the entire dais too high.
             var model_floor := _lowest_mesh_point_y(crypt)
             if is_finite(model_floor):
-                crypt.position.y += 0.01 - model_floor
+                crypt.position.y += COBBLE_SURFACE_Y - model_floor - CRYPT_FOUNDATION_BURY
             else:
                 push_warning("ORVETHRA crypt GLB bounds unavailable")
-            _gate_collision_only()
+                crypt.position.y -= CRYPT_FOUNDATION_BURY
+            # Keep walls, staircase and landing in the same vertical plane as
+            # the newly grounded entrance; do not leave invisible raised steps.
+            _gate_collision_only(CRYPT_FOUNDATION_BURY)
         else:
             _gate_stones()
     else:
@@ -43,7 +53,7 @@ func _ready() -> void:
     plaque.font_size = 28
     plaque.pixel_size = 0.009
     plaque.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-    plaque.position = Vector3(0, 6.35, -0.8)
+    plaque.position = Vector3(0, 6.35 - CRYPT_FOUNDATION_BURY, -0.8)
     plaque.modulate = Color("eccea1")
     add_child(plaque)
 
@@ -81,7 +91,7 @@ func _add_block(where: Vector3, bounds: Vector3, material: Material, collide := 
         body.add_child(shape)
         add_child(body)
 
-func _gate_collision_only() -> void:
+func _gate_collision_only(foundation_bury: float) -> void:
     # Minimal collision: leave the centre passage clear to approach the door.
     var body := StaticBody3D.new()
     body.name = "CryptSideCollisions"
@@ -91,7 +101,7 @@ func _gate_collision_only() -> void:
         var box := BoxShape3D.new()
         box.size = Vector3(1.2, 4.8, 1.8)
         collider.shape = box
-        collider.position = Vector3(side * 3.5, 2.4, 0.5)
+        collider.position = Vector3(side * 3.5, 2.4 - foundation_bury, 0.5)
         body.add_child(collider)
     # Sloped physics proxy supports a smooth climb up visible entrance steps:
     # Godot CharacterBody3D cannot auto-step up individual box colliders.
@@ -102,14 +112,14 @@ func _gate_collision_only() -> void:
     var ramp_shape := BoxShape3D.new()
     ramp_shape.size = Vector3(3.25, 0.18, 5.9)
     ramp.shape = ramp_shape
-    ramp.position = Vector3(0.0, 0.21, -2.65)
+    ramp.position = Vector3(0.0, 0.21 - foundation_bury, -2.65)
     ramp.rotation.x = -atan2(0.60, 5.9)
     ramp_body.add_child(ramp)
     var landing := CollisionShape3D.new()
     var landing_shape := BoxShape3D.new()
     landing_shape.size = Vector3(3.25, 0.20, 1.4)
     landing.shape = landing_shape
-    landing.position = Vector3(0.0, 0.51, 0.85)
+    landing.position = Vector3(0.0, 0.51 - foundation_bury, 0.85)
     ramp_body.add_child(landing)
     # A flush landing joins the textured entrance to the existing street.
     var masonry := StandardMaterial3D.new()
