@@ -99,12 +99,12 @@ jobs:
             echo "Godot import or GDScript error"
             exit 1
           fi
-      - name: Validate all ten animated heroes at 1.90m
+      - name: Validate nine playable heroes at 1.75m plus roaming Greg NPC
         shell: bash
         run: |
           set -euo pipefail
           timeout 100 godot --headless --path . --script res://tests/character_world_scale.gd 2>&1 | tee build/character-size-check.log
-          grep -q 'ROSTER_TEST_TOTAL checked=10 failures=0' build/character-size-check.log
+          grep -q 'ROSTER_TEST_TOTAL checked=9 failures=0' build/character-size-check.log
           if grep -E 'SCRIPT ERROR|Parse Error:' build/character-size-check.log; then
             echo "Character-size validation failed"
             exit 1
