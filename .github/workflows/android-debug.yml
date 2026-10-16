@@ -99,6 +99,14 @@ jobs:
             echo "Godot import or GDScript error"
             exit 1
           fi
+      - name: Probe animated foot and head bone positions
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 100 godot --headless --path . --script res://tests/probe_character_feet.gd 2>&1 | tee build/actor-feet-probe.log
+          if grep -E 'SCRIPT ERROR|Parse Error:' build/actor-feet-probe.log; then
+            exit 1
+          fi
       - name: Validate nine playable heroes at 1.75m plus roaming Greg NPC
         shell: bash
         run: |
