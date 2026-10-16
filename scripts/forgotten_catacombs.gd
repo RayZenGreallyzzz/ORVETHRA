@@ -81,6 +81,12 @@ void fragment() {
 }
 """
 
+func _hero_ground_offset() -> float:
+    # Dungeon's collision floor and visible 2D tile floor are the same height.
+    # Unlike the city roads, no 8cm optical step is needed.
+    return 0.0
+
+
 func _ready() -> void:
     Engine.max_fps = 30
     _load_camera_distance()
