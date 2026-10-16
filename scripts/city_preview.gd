@@ -377,6 +377,52 @@ func _highest_mesh_y(node: Node, relative_to_hero: Transform3D) -> float:
     return top
 
 
+func _collect_hero_corners(node: Node, root_inverse: Transform3D, corners: Array[Vector3]) -> void:
+    if node is MeshInstance3D:
+        var part := node as MeshInstance3D
+        if part.mesh != null:
+            var box := part.mesh.get_aabb()
+            var rel := root_inverse * part.global_transform
+            for ix in range(2):
+                for iy in range(2):
+                    for iz in range(2):
+                        var corner := box.position + box.size * Vector3(float(ix), float(iy), float(iz))
+                        corners.append(rel * corner)
+    for child in node.get_children():
+        _collect_hero_corners(child, root_inverse, corners)
+
+
+func _normalize_hero_visual() -> void:
+    if hero_visual == null:
+        return
+    # Mixamo source GLBs are Z-up in mesh bind coordinates, while animated
+    # skeletons orient them upright. Measuring only Y previously doubled the
+    # size and made heroes appear as giants. Use the LONGEST axis instead.
+    var corners: Array[Vector3] = []
+    _collect_hero_corners(hero_visual, hero_visual.global_transform.affine_inverse(), corners)
+    if corners.is_empty():
+        hero_visual.scale = Vector3.ONE
+        hero_visual.position.y = 0.95
+        return
+    var low := Vector3(INF, INF, INF)
+    var high := Vector3(-INF, -INF, -INF)
+    for corner in corners:
+        low = low.min(corner)
+        high = high.max(corner)
+    var size := high - low
+    var source_height := maxf(size.x, maxf(size.y, size.z))
+    if source_height < 0.000001:
+        return
+    var uniform_scale := clampf(1.8 / source_height, 0.005, 250.0)
+    hero_visual.scale = Vector3.ONE * uniform_scale
+    # The bind-pose mesh is centred at the origin; the active skinned mesh
+    # stands upright, so place its feet about 0.05m above the floor.
+    hero_visual.position = Vector3(-0.5 * (low.x + high.x) * uniform_scale,
+        0.95 - 0.5 * (low.y + high.y) * uniform_scale,
+        -0.5 * (low.z + high.z) * uniform_scale)
+    print("ORVETHRA hero fitted size: ", source_height, " scale: ", uniform_scale)
+
+
 func _disable_hero_shadows(node: Node) -> void:
     if node is GeometryInstance3D:
         node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -413,22 +459,12 @@ func _player() -> void:
         hero_visual.position.y = 0.0
         player.add_child(hero_visual)
         _disable_hero_shadows(hero_visual)
-        var root_inverse := hero_visual.global_transform.affine_inverse()
-        var lowest := _lowest_mesh_y(hero_visual, root_inverse)
-        var highest := _highest_mesh_y(hero_visual, root_inverse)
-        if lowest != INF and highest != -INF:
-            # Eight imported Mixamo GLBs have an armature scaled 0.01.
-            # Make them all 1.8m tall using ONE uniform root scale; preserve
-            # the rigged proportions and keep the physics capsule consistent.
-            var full_height := maxf(0.01, highest - lowest)
-            var model_scale := clampf(1.8 / full_height, 0.35, 180.0)
-            hero_visual.scale = Vector3.ONE * model_scale
-            hero_visual.position.y = (-lowest * model_scale + 0.055)
-        else:
-            hero_visual.position.y = 0.95
         hero_anim = _find_animation_player(hero_visual)
         _prepare_hero_animations()
         _play_hero("Idle")
+        if hero_anim != null:
+            hero_anim.seek(0.05, true)
+        _normalize_hero_visual()
 
     camera = Camera3D.new()
     camera.current = true
