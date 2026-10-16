@@ -11,7 +11,6 @@ const ENTRIES := [
     {"id":"meerkat_baby", "name":"Мира Песчаная Искра", "source":"Meerkat Baby", "model":"res://assets/characters/roster/meerkat_baby_mobile.glb", "role":"Песчаная следопытка, самка", "clip":"Idle"},
     {"id":"meerkat", "name":"Тарек Песчаный Клык", "source":"Meerkat", "model":"res://assets/characters/roster/meerkat_mobile.glb", "role":"Страж пустыни, самец", "clip":"Idle"},
     {"id":"kwnips", "name":"Кворн Грозолап", "source":"KWNIPS", "model":"res://assets/characters/roster/kwnips_mobile.glb", "role":"Грозовой маг, самец", "clip":"Idle"},
-    {"id":"badboy", "name":"Рокхар Беззаконник", "source":"BadBoy", "model":"res://assets/characters/roster/badboy_mobile.glb", "role":"Тёмный дуэлянт", "clip":"Idle"},
     {"id":"bunny", "name":"Лунар Серебролап", "source":"Bunny", "model":"res://assets/characters/roster/bunny_mobile.glb", "role":"Ловкий боец", "clip":"Idle"},
     {"id":"graffitialleycat", "name":"Граффит Ночной Коготь", "source":"GraffitiAlleyCat", "model":"res://assets/characters/roster/graffitialleycat_mobile.glb", "role":"Теневой клинок", "clip":"Idle"},
     {"id":"crimsondrakeshadow_lizard", "name":"Кримзар Тенедракон", "source":"CrimsonDrakeshadow Lizard", "model":"res://assets/characters/roster/crimsondrakeshadow_lizard_mobile.glb", "role":"Багровый воин", "clip":"Idle"}
