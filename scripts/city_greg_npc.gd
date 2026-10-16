@@ -1,7 +1,7 @@
 extends CharacterBody3D
 
-# Greg is the former playable BadBoy model. He wanders through the city,
-# rests beside the fountain and ONLY offers quests while resting there.
+# Greg is the former playable BadBoy model. A stationary idle quest NPC
+# beside the fountain. The user requested he never leave this spot.
 const CharacterRoster = preload("res://scripts/character_roster.gd")
 const BADBOY_MODEL := "res://assets/characters/roster/badboy_mobile.glb"
 const FOUNTAIN_STOP := Vector2(7.5, 1.3)
@@ -31,7 +31,7 @@ var quest_mark: Label3D
 var model: Node3D
 
 func _ready() -> void:
-    name = "GregWanderingQuestNPC"
+    name = "GregFountainQuestNPC"
     position = Vector3(FOUNTAIN_STOP.x, 0.09, FOUNTAIN_STOP.y)
     floor_snap_length = 0.4
     var collider := CollisionShape3D.new()
@@ -115,40 +115,22 @@ func _play_animation(kind: String) -> void:
 
 
 func _physics_process(delta: float) -> void:
-    if rest_seconds > 0.0:
-        rest_seconds = maxf(0.0, rest_seconds - delta)
-        velocity.x = move_toward(velocity.x, 0.0, 12.0 * delta)
-        velocity.z = move_toward(velocity.z, 0.0, 12.0 * delta)
-        _play_animation("Idle")
-    else:
-        resting_at_fountain = false
-        var target: Vector2 = ROUTE[route_index]
-        var offset := target - Vector2(position.x, position.z)
-        if offset.length() < 0.5:
-            resting_at_fountain = route_index == 0 or route_index == 6
-            rest_seconds = 18.0 if resting_at_fountain else 2.5
-            route_index = (route_index + 1) % ROUTE.size()
-            velocity.x = 0.0
-            velocity.z = 0.0
-            _play_animation("Idle")
-        else:
-            var direction := offset.normalized()
-            velocity.x = direction.x * WALK_SPEED
-            velocity.z = direction.y * WALK_SPEED
-            rotation.y = lerp_angle(rotation.y, atan2(-direction.x, -direction.y), minf(1.0, 6.0 * delta))
-            _play_animation("Walk")
-
+    # Greg stays beside the fountain. No random patrol or drifting away.
+    resting_at_fountain = true
+    velocity.x = 0.0
+    velocity.z = 0.0
     if not is_on_floor():
         velocity.y -= 20.0 * delta
     else:
-        velocity.y = -0.25
+        velocity.y = -0.2
     move_and_slide()
+    _play_animation("Idle")
     if quest_mark != null:
-        quest_mark.visible = resting_at_fountain and rest_seconds > 0.0 and not quest_taken
+        quest_mark.visible = not quest_taken
 
 
 func can_give_quest(player_at: Vector3) -> bool:
-    return (not quest_taken and resting_at_fountain and rest_seconds > 0.0
+    return (not quest_taken
         and Vector2(position.x, position.z).distance_to(FOUNTAIN_STOP) < 1.1
         and Vector2(player_at.x, player_at.z).distance_to(Vector2(position.x, position.z)) < 3.3)
 
