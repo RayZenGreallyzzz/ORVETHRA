@@ -5,6 +5,7 @@ extends Node3D
 const MAP_HALF_X := 107.0
 const MAP_HALF_Z := 93.0
 const HeroRoster = preload("res://scripts/hero_roster.gd")
+const CharacterRoster = preload("res://scripts/character_roster.gd")
 const HERO_FALLBACK_PATH := "res://assets/characters/ORVETHRA_NeonAlleycat_Animated_Mobile.glb"
 const FountainMobile = preload("res://scripts/fountain_mobile.gd")
 const TrainingField = preload("res://scripts/city_training.gd")
@@ -395,32 +396,22 @@ func _collect_hero_corners(node: Node, root_inverse: Transform3D, corners: Array
 func _normalize_hero_visual() -> void:
     if hero_visual == null:
         return
-    # Mixamo source GLBs are Z-up in mesh bind coordinates, while animated
-    # skeletons orient them upright. Measuring only Y previously doubled the
-    # size and made heroes appear as giants. Use the LONGEST axis instead.
-    var corners: Array[Vector3] = []
-    _collect_hero_corners(hero_visual, hero_visual.global_transform.affine_inverse(), corners)
-    if corners.is_empty():
-        hero_visual.scale = Vector3.ONE
-        hero_visual.position.y = 0.95
-        return
-    var low := Vector3(INF, INF, INF)
-    var high := Vector3(-INF, -INF, -INF)
-    for corner in corners:
-        low = low.min(corner)
-        high = high.max(corner)
-    var size := high - low
-    var source_height := maxf(size.x, maxf(size.y, size.z))
-    if source_height < 0.000001:
-        return
-    var uniform_scale := clampf(1.8 / source_height, 0.005, 250.0)
-    hero_visual.scale = Vector3.ONE * uniform_scale
-    # The bind-pose mesh is centred at the origin; the active skinned mesh
-    # stands upright, so place its feet about 0.05m above the floor.
-    hero_visual.position = Vector3(-0.5 * (low.x + high.x) * uniform_scale,
-        0.95 - 0.5 * (low.y + high.y) * uniform_scale,
-        -0.5 * (low.z + high.z) * uniform_scale)
-    print("ORVETHRA hero fitted size: ", source_height, " scale: ", uniform_scale)
+    # IMPORTANT: Godot's imported MeshInstance AABB is ~0.019m for
+    # many Mixamo GLBs with a 0.01 Armature parent, whereas their SKINNED
+    # visible vertex coordinates are already ~1.9m. Scaling 1.9 / 0.019
+    # inflated the animated character about 100x (giant feet in the city).
+    #
+    # Measured mesh POSITION extents in all 10 approved source GLBs are
+    # 1.87..1.90m. Keep original skin and rig units; adjust only by the
+    # measured (near-unity) ratio to reach 1.90m.
+    var id := HeroRoster.selected_id()
+    var ratio := CharacterRoster.world_scale(id)
+    hero_visual.scale = Vector3.ONE * ratio
+    # Mesh vertex Y bounds are around -0.95..+0.95; move their midpoint
+    # to half the playable height so feet land on the city floor.
+    hero_visual.position = Vector3(0.0, CharacterRoster.target_height_metres() * 0.5 + 0.055, 0.0)
+    print("ORVETHRA hero: ", id, " target height: ",
+        CharacterRoster.target_height_metres(), "m scale: ", ratio)
 
 
 func _disable_hero_shadows(node: Node) -> void:
