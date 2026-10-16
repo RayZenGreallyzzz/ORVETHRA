@@ -324,7 +324,10 @@ func _select_roster(id: String) -> void:
     scene.name = str(entry["title"])
     roster_preview_root.add_child(scene)
 
-    # Fit every rig to the same preview frame while keeping original proportions.
+    _start_preview_idle(scene)
+    # Source GLBs have Z-up bind meshes, even though their animation bones
+    # stand vertically. Using only local Y made the preview a giant face/legs.
+    # Measure the longest bind-mesh axis and uniformly fit a 2.2m showcase.
     var corners: Array[Vector3] = []
     _collect_preview_points(scene, corners)
     if not corners.is_empty():
@@ -333,12 +336,14 @@ func _select_roster(id: String) -> void:
         for point in corners:
             low = low.min(point)
             high = high.max(point)
-        var height := maxf(0.1, high.y - low.y)
-        var widest := maxf(high.x - low.x, high.z - low.z)
-        var scale_factor := minf(2.5 / height, 2.6 / maxf(0.1, widest))
-        scene.scale = Vector3.ONE * scale_factor
-        scene.position = Vector3(-(low.x + high.x) * 0.5, -low.y, -(low.z + high.z) * 0.5) * scale_factor
-    _start_preview_idle(scene)
+        var size := high - low
+        var max_dimension := maxf(size.x, maxf(size.y, size.z))
+        if max_dimension > 0.000001:
+            var scale_factor := clampf(2.2 / max_dimension, 0.005, 280.0)
+            scene.scale = Vector3.ONE * scale_factor
+            scene.position = Vector3(-0.5 * (low.x + high.x) * scale_factor,
+                1.23 - 0.5 * (low.y + high.y) * scale_factor,
+                -0.5 * (low.z + high.z) * scale_factor)
 
 
 func _collect_preview_points(node: Node, corners: Array[Vector3]) -> void:
