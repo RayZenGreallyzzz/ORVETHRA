@@ -16,6 +16,20 @@ func _find_anim(node: Node) -> AnimationPlayer:
             return found
     return null
 
+func _toe_min_world(node: Node) -> float:
+    var low := INF
+    if node is Skeleton3D:
+        var skeleton := node as Skeleton3D
+        for index in range(skeleton.get_bone_count()):
+            var name := String(skeleton.get_bone_name(index)).to_lower()
+            if name.contains("toe"):
+                var p: Vector3 = skeleton.to_global(skeleton.get_bone_global_pose(index).origin)
+                low = minf(low, p.y)
+    for child in node.get_children():
+        low = minf(low, _toe_min_world(child))
+    return low
+
+
 func _validate_roster() -> void:
     var failures := 0
     var checked := 0
@@ -43,6 +57,23 @@ func _validate_roster() -> void:
         var rig := pack.instantiate()
         root.add_child(rig)
         var anim := _find_anim(rig)
+        if anim != null:
+            for clip in anim.get_animation_list():
+                if String(clip).to_lower().ends_with("idle"):
+                    anim.play(clip)
+                    anim.seek(0.30, true)
+                    break
+        # True animated ground-contact test, not just metadata arithmetic:
+        # physics street floor is y=-0.07 and its cobbles render at y=+0.008.
+        # Toe bones must land on the visible surface once corrected.
+        rig.scale = Vector3.ONE * ratio
+        rig.position.y = -0.07 + 0.08
+        var lowest_toe := _toe_min_world(rig)
+        if not is_finite(lowest_toe) or absf(lowest_toe - 0.008) > 0.075:
+            push_error("Hero feet floating: " + id + " toe_y=" + str(lowest_toe))
+            failures += 1
+        else:
+            print("GROUND_CONTACT_OK id=", id, " toe_y=", lowest_toe)
         if anim == null:
             push_error("No AnimationPlayer: " + id)
             failures += 1
@@ -77,6 +108,20 @@ func _validate_roster() -> void:
             var greg := greg_pack.instantiate()
             root.add_child(greg)
             var npc_anim := _find_anim(greg)
+            if npc_anim != null:
+                for clip in npc_anim.get_animation_list():
+                    if String(clip).to_lower().ends_with("idle"):
+                        npc_anim.play(clip)
+                        npc_anim.seek(0.30, true)
+                        break
+            greg.scale = Vector3.ONE * CharacterRoster.world_scale("badboy")
+            greg.position.y = -0.07 + 0.08
+            var greg_toes := _toe_min_world(greg)
+            if not is_finite(greg_toes) or absf(greg_toes - 0.008) > 0.075:
+                push_error("Greg NPC feet floating: y=" + str(greg_toes))
+                failures += 1
+            else:
+                print("GROUND_CONTACT_OK id=greg toe_y=", greg_toes)
             if npc_anim == null:
                 push_error("Greg NPC has no animation player")
                 failures += 1
