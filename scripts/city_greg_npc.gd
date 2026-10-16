@@ -11,6 +11,10 @@ const ESCORT_DESTINATION := Vector2(78.0, 78.0)
 const QUEST_INTERVAL_SECONDS := 10800.0
 const WALK_SPEED := 2.35
 const ESCORT_SPEED := 3.75
+# Fountain collider radius is 3.65m. Leave extra clearance for Greg's capsule.
+const FOUNTAIN_KEEP_OUT := 5.15
+const FOUNTAIN_RING_RADIUS := 6.50
+const FOUNTAIN_RING_STEPS := 24
 
 var game
 var rng := RandomNumberGenerator.new()
@@ -201,13 +205,49 @@ func _link_points(a: int, b: int) -> void:
 func _create_road_graph() -> void:
     if game == null:
         return
+    road_nodes.clear()
+    connections.clear()
+    # City road spokes used to meet INSIDE the fountain collision at (0, 0).
+    # Replace those straight shortcuts with a walkable loop around the basin.
+    var ring_ids: Array[int] = []
+    for i in range(FOUNTAIN_RING_STEPS):
+        var angle := TAU * float(i) / float(FOUNTAIN_RING_STEPS)
+        ring_ids.append(_node_id(Vector2(cos(angle), sin(angle)) * FOUNTAIN_RING_RADIUS))
+    for i in range(ring_ids.size()):
+        _link_points(ring_ids[i], ring_ids[(i + 1) % ring_ids.size()])
     for road in game.roads:
         var previous := -1
         for point in road:
+            if point.length() < FOUNTAIN_KEEP_OUT:
+                if previous >= 0:
+                    _link_points(previous, _nearest_ring_node(road_nodes[previous], ring_ids))
+                previous = -1
+                continue
             var current := _node_id(point)
             if previous >= 0:
                 _link_points(previous, current)
             previous = current
+
+func _nearest_ring_node(point: Vector2, ring_ids: Array[int]) -> int:
+    var best_id := ring_ids[0]
+    var best_distance := INF
+    for id in ring_ids:
+        var distance := point.distance_squared_to(road_nodes[id])
+        if distance < best_distance:
+            best_distance = distance
+            best_id = id
+    return best_id
+
+func _direct_path_clear(target: Vector2) -> bool:
+    # Respect real StaticBody3D obstacles before running straight at the player.
+    var start := global_position + Vector3.UP * 0.75
+    var end := Vector3(target.x, global_position.y + 0.75, target.y)
+    var query := PhysicsRayQueryParameters3D.create(start, end)
+    var excluded: Array[RID] = [get_rid()]
+    if game != null and game.player != null:
+        excluded.append(game.player.get_rid())
+    query.exclude = excluded
+    return get_world_3d().direct_space_state.intersect_ray(query).is_empty()
 
 func _nearest_node(p: Vector2) -> int:
     var nearest := -1
@@ -342,14 +382,19 @@ func _follow_escort(delta: float) -> void:
         return
     # Follow the real road graph when distant. Near the player, approach
     # directly for a natural companion position instead of cutting corners.
-    if separation < 8.0:
+    if separation < 8.0 and _direct_path_clear(player_pos):
+        follow_repath = 0.0
         _move_towards(player_pos, ESCORT_SPEED, delta)
         return
     follow_repath -= delta
-    if follow_repath <= 0.0 or follow_last_target.distance_to(player_pos) > 5.0:
-        follow_repath = 2.5
+    if follow_repath <= 0.0 or follow_last_target.distance_to(player_pos) > 3.0:
+        follow_repath = 1.0
         follow_last_target = player_pos
-        _plan_road_path(player_pos)
+        if not _plan_road_path(player_pos):
+            velocity.x = 0.0
+            velocity.z = 0.0
+            _play_animation("Idle")
+            return
     if travel_index < travel_path.size():
         var next := travel_path[travel_index]
         if here.distance_to(next) < 1.05:
@@ -357,7 +402,14 @@ func _follow_escort(delta: float) -> void:
         if travel_index < travel_path.size():
             _move_towards(travel_path[travel_index], ESCORT_SPEED, delta)
             return
-    _move_towards(player_pos, ESCORT_SPEED, delta)
+    # Do not cut through solid geometry after the last road waypoint.
+    if _direct_path_clear(player_pos):
+        _move_towards(player_pos, ESCORT_SPEED, delta)
+    else:
+        follow_repath = 0.0
+        velocity.x = 0.0
+        velocity.z = 0.0
+        _play_animation("Idle")
 
 func _physics_process(delta: float) -> void:
     if escort_active:

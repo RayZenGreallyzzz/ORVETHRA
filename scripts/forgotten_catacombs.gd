@@ -316,14 +316,33 @@ func _decorate_guard_tile(location: Vector3, span: float, horizontal: bool) -> v
 
 
 func _exit_marker() -> void:
-    var plaque := Label3D.new()
-    plaque.text = "Выход в ORVETHRA"
-    plaque.font_size = 40
-    plaque.pixel_size = 0.012
-    plaque.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-    plaque.position = Vector3(0, 2.4, 77.0)
-    plaque.modulate = Color("edd2a0")
-    add_child(plaque)
+    # Quiet, dark-red exit disk on the floor instead of camera-filling text.
+    var circle := MeshInstance3D.new()
+    circle.name = "DungeonExitRedCircle"
+    var disc := CylinderMesh.new()
+    disc.top_radius = 1.15
+    disc.bottom_radius = 1.15
+    disc.height = 0.012
+    disc.radial_segments = 32
+    circle.mesh = disc
+    circle.position = Vector3(0.0, 0.018, 77.0)
+    var material := StandardMaterial3D.new()
+    material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+    material.albedo_color = Color(0.43, 0.045, 0.055, 0.46)
+    material.emission_enabled = true
+    material.emission = Color(0.19, 0.015, 0.025)
+    material.emission_energy_multiplier = 0.28
+    material.roughness = 1.0
+    material.cull_mode = BaseMaterial3D.CULL_DISABLED
+    circle.material_override = material
+    circle.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    add_child(circle)
+
+func _near_exit_marker() -> bool:
+    if player == null:
+        return false
+    return Vector2(player.global_position.x, player.global_position.z).distance_to(Vector2(0.0, 77.0)) < 1.45
 
 func _return_to_city() -> void:
     # Restore the hero just outside the crypt instead of at the fountain.

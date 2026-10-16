@@ -30,7 +30,11 @@ func _ready() -> void:
     joystick = JoystickControl.new()
     ui_root.add_child(joystick)
     exit_button = _button("Вернуться в город")
-    exit_button.pressed.connect(func() -> void: game._return_to_city())
+    exit_button.visible = false
+    exit_button.pressed.connect(func() -> void:
+        if game != null and game._near_exit_marker():
+            game._return_to_city()
+    )
     camera_near = _button("Камера +")
     camera_near.pressed.connect(func() -> void: game._change_camera_distance(-1))
     camera_far = _button("Камера −")
@@ -64,6 +68,10 @@ func _layout() -> void:
     camera_near.size = Vector2(98, 45)
     camera_far.position = Vector2(view.x - 116, view.y - 127)
     camera_far.size = Vector2(98, 45)
+
+func _process(_delta: float) -> void:
+    if game != null and exit_button != null:
+        exit_button.visible = game._near_exit_marker()
 
 func is_popup_open() -> bool:
     return false

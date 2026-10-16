@@ -22,11 +22,17 @@ func _ready() -> void:
             # Uniform 4.6x makes a ~8.7m-wide, ~5.75m-tall gate matching
             # the 8.8m cobbled street without distorting statues or arches.
             crypt.scale = Vector3.ONE * 4.6
-            crypt.position = Vector3(0, 2.88, 0.0)
+            crypt.position = Vector3.ZERO
             # The imported GLB facade looks toward +Z. Face the gate and
             # stairs down the approved road, which approaches from local -Z.
             crypt.rotation.y = PI
             add_child(crypt)
+            # Align actual imported geometry to the road, not a guessed +2.88m.
+            var model_floor := _lowest_mesh_point_y(crypt)
+            if is_finite(model_floor):
+                crypt.position.y += 0.01 - model_floor
+            else:
+                push_warning("ORVETHRA crypt GLB bounds unavailable")
             _gate_collision_only()
         else:
             _gate_stones()
@@ -40,6 +46,21 @@ func _ready() -> void:
     plaque.position = Vector3(0, 6.35, -0.8)
     plaque.modulate = Color("eccea1")
     add_child(plaque)
+
+func _lowest_mesh_point_y(node: Node) -> float:
+    var lowest := INF
+    if node is MeshInstance3D:
+        var mesh_node := node as MeshInstance3D
+        if mesh_node.mesh != null:
+            var bounds := mesh_node.mesh.get_aabb()
+            for x in range(2):
+                for y in range(2):
+                    for z in range(2):
+                        var point := bounds.position + bounds.size * Vector3(float(x), float(y), float(z))
+                        lowest = minf(lowest, to_local(mesh_node.to_global(point)).y)
+    for child in node.get_children():
+        lowest = minf(lowest, _lowest_mesh_point_y(child))
+    return lowest
 
 func _add_block(where: Vector3, bounds: Vector3, material: Material, collide := true) -> void:
     var visible_part := MeshInstance3D.new()
@@ -72,6 +93,24 @@ func _gate_collision_only() -> void:
         collider.shape = box
         collider.position = Vector3(side * 3.5, 2.4, 0.5)
         body.add_child(collider)
+    # Sloped physics proxy supports a smooth climb up visible entrance steps:
+    # Godot CharacterBody3D cannot auto-step up individual box colliders.
+    var ramp_body := StaticBody3D.new()
+    ramp_body.name = "CryptStairCollision"
+    add_child(ramp_body)
+    var ramp := CollisionShape3D.new()
+    var ramp_shape := BoxShape3D.new()
+    ramp_shape.size = Vector3(3.25, 0.18, 5.9)
+    ramp.shape = ramp_shape
+    ramp.position = Vector3(0.0, 0.21, -2.65)
+    ramp.rotation.x = -atan2(0.60, 5.9)
+    ramp_body.add_child(ramp)
+    var landing := CollisionShape3D.new()
+    var landing_shape := BoxShape3D.new()
+    landing_shape.size = Vector3(3.25, 0.20, 1.4)
+    landing.shape = landing_shape
+    landing.position = Vector3(0.0, 0.51, 0.85)
+    ramp_body.add_child(landing)
     # A flush landing joins the textured entrance to the existing street.
     var masonry := StandardMaterial3D.new()
     masonry.albedo_color = Color("77716b")
