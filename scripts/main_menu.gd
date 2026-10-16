@@ -327,7 +327,7 @@ func _select_roster(id: String) -> void:
     _start_preview_idle(scene)
     # Source GLBs have Z-up bind meshes, even though their animation bones
     # stand vertically. Using only local Y made the preview a giant face/legs.
-    # Same verified 1.9m scale as the actual playable character.
+    # Same verified 1.75m scale as the playable character.
     # Never normalize against a Mixamo root AABB of 0.019m: the
     # animated skinned mesh already covers roughly 1.9 world metres.
     scene.scale = Vector3.ONE * CharacterRoster.world_scale(id)
