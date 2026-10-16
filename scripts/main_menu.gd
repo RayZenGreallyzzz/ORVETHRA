@@ -258,6 +258,21 @@ func _show_roster(box: VBoxContainer) -> void:
     var scene_root := Node3D.new()
     scene_root.name = "RosterShowcase"
     roster_viewport.add_child(scene_root)
+    # A subtle floor disc gives players visual confirmation that the hero
+    # actually stands on the ground in the animated selector.
+    var preview_floor := MeshInstance3D.new()
+    var preview_floor_mesh := CylinderMesh.new()
+    preview_floor_mesh.top_radius = 1.35
+    preview_floor_mesh.bottom_radius = 1.35
+    preview_floor_mesh.height = 0.025
+    preview_floor_mesh.radial_segments = 32
+    preview_floor.mesh = preview_floor_mesh
+    preview_floor.position.y = -0.023
+    var floor_material := StandardMaterial3D.new()
+    floor_material.albedo_color = Color("37343b")
+    floor_material.roughness = 1.0
+    preview_floor.material_override = floor_material
+    scene_root.add_child(preview_floor)
     roster_preview_root = Node3D.new()
     roster_preview_root.name = "AnimatedHero"
     scene_root.add_child(roster_preview_root)
@@ -331,7 +346,9 @@ func _select_roster(id: String) -> void:
     # Never normalize against a Mixamo root AABB of 0.019m: the
     # animated skinned mesh already covers roughly 1.9 world metres.
     scene.scale = Vector3.ONE * CharacterRoster.world_scale(id)
-    scene.position = Vector3(0.0, CharacterRoster.target_height_metres() * 0.5 + 0.055, 0.0)
+    # Imported Idle toe bones are near Y=0. Keep character standing on the
+    # preview floor, not floating one metre above the bottom of the frame.
+    scene.position = Vector3(0.0, 0.025, 0.0)
     scene.rotation.y = PI
 
 
