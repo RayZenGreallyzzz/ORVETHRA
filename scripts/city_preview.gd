@@ -396,6 +396,11 @@ func _collect_hero_corners(node: Node, root_inverse: Transform3D, corners: Array
         _collect_hero_corners(child, root_inverse, corners)
 
 
+func _hero_ground_offset() -> float:
+    # Flat city physics floor ends at y=-0.07; visible street at +0.008.
+    return 0.08
+
+
 func _normalize_hero_visual() -> void:
     if hero_visual == null:
         return
@@ -410,12 +415,12 @@ func _normalize_hero_visual() -> void:
     var id := HeroRoster.selected_id()
     var ratio := CharacterRoster.world_scale(id)
     hero_visual.scale = Vector3.ONE * ratio
-    # Mesh vertex Y bounds are around -0.95..+0.95; move their midpoint
-    # to half the playable height so feet land on the city floor.
-    # Position feet at street height: visual origin is the model midpoint,
-    # while the CharacterBody's floor contact sits roughly 7cm below the
-    # rendered cobblestone. Keep local offset fixed under animation.
-    hero_visual.position = Vector3(0.0, CharacterRoster.target_height_metres() * 0.5 + 0.10, 0.0)
+    # Rigged toe bones from the actual imported Idle pose are at Y~=0.
+    # The old half-height offset made them float almost one metre above ground.
+    # The tested Mixamo toe bones are already at local Y~=0 in Idle.
+    # Placing the rig at half body-height lifted everyone ~0.95m off ground.
+    # Only compensate for the city cobblestone being 0.08m above physics floor.
+    hero_visual.position = Vector3(0.0, _hero_ground_offset(), 0.0)
     print("ORVETHRA hero: ", id, " target height: ",
         CharacterRoster.target_height_metres(), "m scale: ", ratio)
 
