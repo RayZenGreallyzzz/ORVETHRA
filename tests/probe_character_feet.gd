@@ -54,7 +54,7 @@ func _probe() -> void:
         var seen := 0
         var queue: Array[Node] = [actor]
         while not queue.is_empty():
-            var node := queue.pop_back()
+            var node: Node = queue.pop_back()
             if node is MeshInstance3D and seen < 2:
                 var mesh_node := node as MeshInstance3D
                 if mesh_node.mesh != null:
