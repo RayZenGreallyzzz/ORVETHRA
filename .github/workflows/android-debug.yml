@@ -1,4 +1,4 @@
-name: ORVETHRA Greg NPC and 175cm Heroes v0.20
+name: ORVETHRA 175cm Grounded Heroes and Greg v0.21
 
 on:
   push:
@@ -107,7 +107,7 @@ jobs:
           if grep -E 'SCRIPT ERROR|Parse Error:' build/actor-feet-probe.log; then
             exit 1
           fi
-      - name: Validate nine playable heroes at 1.75m plus roaming Greg NPC
+      - name: Validate nine playable heroes at 1.75m plus stationary Greg NPC
         shell: bash
         run: |
           set -euo pipefail
@@ -146,6 +146,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ORVETHRA-Greg-NPC-175cm-v020-Android
+          name: ORVETHRA-Grounded-Heroes-v021-Android
           path: build/ORVETHRA-IT801C-debug.apk
           retention-days: 14
