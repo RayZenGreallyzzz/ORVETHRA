@@ -10,6 +10,10 @@ var joystick
 var minimap
 var title: Label
 var stats: Panel
+var hero_hp := 120
+const HERO_MAX_HP := 120
+var hp_bar: ProgressBar
+var hp_label: Label
 var quest_button: Button
 var map_header: Label
 var map_button: Button
@@ -71,7 +75,7 @@ func _button(text: String, circular := false) -> Button:
     root.add_child(button)
     return button
 
-func _bar(parent: Node, tint: Color, offset: Vector2) -> void:
+func _bar(parent: Node, tint: Color, offset: Vector2) -> ProgressBar:
     var bar := ProgressBar.new()
     bar.position = offset
     bar.size = Vector2(248, 21)
@@ -80,6 +84,29 @@ func _bar(parent: Node, tint: Color, offset: Vector2) -> void:
     bar.add_theme_stylebox_override("background", _style(Color(0.06, 0.07, 0.08, 0.95), Color(0.54, 0.47, 0.33, 0.7), 2))
     bar.add_theme_stylebox_override("fill", _style(tint, tint.darkened(0.25), 1))
     parent.add_child(bar)
+    return bar
+
+func _refresh_health() -> void:
+    if hp_bar != null:
+        hp_bar.value = 100.0 * float(hero_hp) / float(HERO_MAX_HP)
+    if hp_label != null:
+        hp_label.text = str(hero_hp) + " / " + str(HERO_MAX_HP)
+
+func on_training_hit(damage: int, slime_level: int) -> void:
+    if game == null or game.player == null or hero_hp <= 0:
+        return
+    hero_hp = maxi(0, hero_hp - damage)
+    _refresh_health()
+    if hero_hp > 0:
+        show_combat_message("Слизень Lv." + str(slime_level) + " укусил: -" + str(damage) + " HP  ·  " + str(hero_hp) + "/" + str(HERO_MAX_HP))
+    else:
+        # The offline training scene has no resurrection NPC yet. Reset locally
+        # to the safe fountain spawn rather than leaving an unplayable dead hero.
+        game.player.position = Vector3(0.0, 0.12, 11.0)
+        game.player.velocity = Vector3.ZERO
+        hero_hp = HERO_MAX_HP
+        _refresh_health()
+        show_combat_message("Поражение на тренировке! Вы вернулись к фонтану.")
 
 func _ready() -> void:
     root = Control.new()
@@ -97,13 +124,14 @@ func _ready() -> void:
     var lv := _label("Lv. 1   Путник", 19, Color("f5e2c9"))
     lv.position = Vector2(11, 5)
     stats.add_child(lv)
-    _bar(stats, Color("a92f29"), Vector2(10, 34))
+    hp_bar = _bar(stats, Color("a92f29"), Vector2(10, 34))
     _bar(stats, Color("2959a6"), Vector2(10, 60))
-    var hp := _label("120 / 120", 14, Color.WHITE)
-    hp.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    hp.position = Vector2(11, 34)
-    hp.size = Vector2(246, 20)
-    stats.add_child(hp)
+    hp_label = _label("120 / 120", 14, Color.WHITE)
+    hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    hp_label.position = Vector2(11, 34)
+    hp_label.size = Vector2(246, 20)
+    stats.add_child(hp_label)
+    _refresh_health()
     var mp := _label("60 / 60", 14, Color.WHITE)
     mp.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     mp.position = Vector2(11, 60)
@@ -402,7 +430,7 @@ func _open_menu() -> void:
     popup_heading.text = "ORVETHRA · Меню"
     popup_description.text = "Тестовые разделы и навигация.\nОнлайн-функции пока не подключены."
     _clear_popup_actions()
-    _popup_button("Персонаж", func() -> void: _open_notice("Путник, Lv.1\nHP 120 · MP 60\nПодробные характеристики будут позже."))
+    _popup_button("Персонаж", func() -> void: _open_notice("Путник, Lv.1\nHP " + str(hero_hp) + " / " + str(HERO_MAX_HP) + " · MP 60\nПодробные характеристики будут позже."))
     _popup_button("Инвентарь (тест)", func() -> void: _open_notice("Пока доступно 5 тестовых зелий.\nЭкипировка будет подключена отдельно."))
     _popup_button("Журнал заданий", _open_quest)
     _popup_button("Карта города / Пешком", _switch_map)
@@ -501,6 +529,12 @@ func _use_potion() -> void:
     if potion_count < 1:
         show_combat_message("Тестовые зелья закончились.")
         return
+    if hero_hp >= HERO_MAX_HP:
+        show_combat_message("Здоровье уже полное. Зелье сохранено.")
+        return
+    var restored := mini(25, HERO_MAX_HP - hero_hp)
+    hero_hp += restored
     potion_count -= 1
     potion_button.text = "✦\n" + str(potion_count)
-    show_combat_message("Использовано тестовое зелье. Осталось: " + str(potion_count) + ".")
+    _refresh_health()
+    show_combat_message("Зелье: +" + str(restored) + " HP  ·  " + str(hero_hp) + "/" + str(HERO_MAX_HP))

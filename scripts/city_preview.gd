@@ -850,6 +850,11 @@ func _on_training_slime_defeated(level: int) -> void:
     if city_hud != null:
         city_hud.on_training_kill(level)
 
+func _on_training_slime_attack(damage: int, level: int) -> void:
+    # Shared combat callback: each landed slime hop deals exactly 1 HP.
+    if city_hud != null and not overview:
+        city_hud.on_training_hit(damage, level)
+
 func _try_attack() -> void:
     if training == null or city_hud == null:
         return

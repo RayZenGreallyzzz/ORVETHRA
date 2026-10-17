@@ -1,4 +1,4 @@
-name: ORVETHRA Training Clearing Road Clearance v0.28
+name: ORVETHRA Slime Training Combat and Ground v0.29
 
 on:
   push:
@@ -56,6 +56,8 @@ jobs:
           test -s scenes/combat.tscn
           test -s scenes/city_preview.tscn
           test -s scripts/city_preview.gd
+          test -s assets/city/training_grass_earth_mobile.webp
+          test -s assets/city/training_worn_gravel_mobile.webp
           test -s assets/characters/ORVETHRA_NeonAlleycat_Animated_Mobile.glb
           test -s assets/fountain/guardian_fountain_mobile.bin
           test -s scripts/fountain_mobile.gd
@@ -136,6 +138,15 @@ jobs:
             echo "Catacombs scene runtime error"
             exit 1
           fi
+      - name: Validate training arena terrain and slime spawn
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 80 godot --headless --path . --script res://tests/training_arena_smoke.gd 2>&1 | tee build/training-arena-check.log
+          grep -q 'TRAINING_ARENA_OK' build/training-arena-check.log
+          if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call|Invalid get index' build/training-arena-check.log; then
+            exit 1
+          fi
       - name: Export signed debug test APK
         shell: bash
         run: |
@@ -146,6 +157,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ORVETHRA-Training-Clearing-v028-Android
+          name: ORVETHRA-Training-Combat-v029-Android
           path: build/ORVETHRA-IT801C-debug.apk
           retention-days: 14
