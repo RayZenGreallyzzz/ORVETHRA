@@ -1,4 +1,4 @@
-name: ORVETHRA Continuous Road Border v0.27
+name: ORVETHRA Training Clearing Road Clearance v0.28
 
 on:
   push:
@@ -146,6 +146,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ORVETHRA-Continuous-Curbs-v027-Android
+          name: ORVETHRA-Training-Clearing-v028-Android
           path: build/ORVETHRA-IT801C-debug.apk
           retention-days: 14

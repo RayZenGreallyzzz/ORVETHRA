@@ -1,8 +1,10 @@
 extends Node3D
 
-# Lightweight training clearing at the end of the north-eastern lane.
-# Nine stylized 3D slimes: three each at levels 1, 5 and 10.
-const CENTER := Vector3(91.0, 0.0, 70.0)
+# Lightweight training clearing beside the north-eastern lane.
+# Shifted +8m in world X onto the left-hand grassy field (seen from the road).
+# The whole 12m clearing and its 12.3m posts now sit outside the road ribbons;
+# slime positions, combat reach and respawn behaviour stay unchanged.
+const CENTER := Vector3(99.0, 0.0, 70.0)
 const ARENA_RADIUS := 12.0
 var game
 var slimes: Array[Dictionary] = []
@@ -64,7 +66,7 @@ func _make_clearing() -> void:
     pole.size = Vector3(0.28, 2.5, 0.28)
     signpost.mesh = pole
     signpost.material_override = post_mat
-    signpost.position = Vector3(83.6, 1.23, 60.4)
+    signpost.position = CENTER + Vector3(-7.4, 1.23, -9.6)
     add_child(signpost)
     var sign := Label3D.new()
     sign.text = "ТРЕНИРОВОЧНАЯ ПОЛЯНА\nСЛИЗНИ  Lv.1 / Lv.5 / Lv.10"
@@ -72,7 +74,7 @@ func _make_clearing() -> void:
     sign.pixel_size = 0.008
     sign.outline_size = 8
     sign.modulate = Color("f0d6aa")
-    sign.position = Vector3(83.6, 2.65, 60.4)
+    sign.position = CENTER + Vector3(-7.4, 2.65, -9.6)
     sign.billboard = BaseMaterial3D.BILLBOARD_ENABLED
     add_child(sign)
 

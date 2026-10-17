@@ -32,8 +32,8 @@ func _draw() -> void:
                 draw_line(a, b, Color(0.60, 0.54, 0.43), 4, true)
     draw_circle(center, size.x * 0.065, Color(0.61, 0.55, 0.44, 0.92))
     draw_circle(center, size.x * 0.025, Color(0.44, 0.72, 0.88, 1.0))
-    # Training clearing at the end of the north-eastern branch.
-    var training_icon := _map(Vector2(91.0, 70.0))
+    # Training clearing moved 8m farther into the left-hand grass.
+    var training_icon := _map(Vector2(99.0, 70.0))
     if training_icon.distance_to(center) < radius:
         draw_circle(training_icon, 6.0, Color(0.88, 0.34, 0.35, 1.0))
         draw_arc(training_icon, 8.0, 0, TAU, 24, Color(0.99, 0.85, 0.53, 0.96), 2.0, true)
