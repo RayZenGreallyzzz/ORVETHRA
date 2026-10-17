@@ -57,6 +57,9 @@ func _create_visual() -> void:
             visual = scene.instantiate()
             visual.name = "AsuraBabyRig"
             visual.scale = Vector3.ONE * 1.65
+            # Imported idle bounds descend ~0.28m below the model origin.
+            # Lift visual feet onto the boss-room floor without moving AI root.
+            visual.position.y = 0.46
             visual.rotation.y = PI
             add_child(visual)
             model_installed = true
@@ -118,6 +121,9 @@ func _resolve_motion(key: String) -> StringName:
         if normalized == lookup or normalized.ends_with("/" + lookup) or normalized.begins_with(lookup):
             return anim
     if lookup == "run":
+        for anim in animator.get_animation_list():
+            if String(anim).begins_with("138_"):
+                return anim
         return _resolve_motion("Walk")
     return &""
 

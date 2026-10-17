@@ -11,6 +11,9 @@ func _test() -> void:
     assert(scene.asura_boss != null, "Missing Asura in boss hall")
     var boss = scene.asura_boss
     assert(boss.hp == boss.MAX_HP)
+    if FileAccess.file_exists("res://ORVETHRA_Asura_Boss_Android.zip"):
+        assert(boss.model_installed, "Asura ZIP is present, but the actual rigged boss GLB is not loaded")
+        assert(boss._resolve_motion("Run") != &"", "Missing running animation from six-clip GLB")
     assert(Vector2(boss.position.x, boss.position.z).distance_to(Vector2(-17.0, -47.5)) < 0.3)
     scene.player.position = Vector3(-17.0, 0.2, -51.0)
     var first: String = boss.receive_damage(12)

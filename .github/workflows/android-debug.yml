@@ -31,23 +31,20 @@ jobs:
         run: |
           set -euo pipefail
           if [ -f ORVETHRA_Asura_Boss_Android.zip ]; then
-            python3 - <<'PY'
-          import zipfile, os
-          name = "ORVETHRA_Asura_Boss_Android.zip"
-          wanted = "assets/catacombs/boss/asura_baby_mobile.glb"
-          with zipfile.ZipFile(name) as z:
-              assert wanted in z.namelist(), f"Missing {wanted}"
-              info = z.getinfo(wanted)
-              assert info.file_size > 1000000, "Unexpectedly tiny boss asset"
-              os.makedirs(os.path.dirname(wanted), exist_ok=True)
-              with z.open(info) as src, open(wanted, "wb") as dst:
-                  while True:
-                      chunk = src.read(1024 * 1024)
-                      if not chunk:
-                          break
-                      dst.write(chunk)
-          print("Installed Asura Baby rigged boss GLB:", wanted)
-          PY
+            name="ORVETHRA_Asura_Boss_Android.zip"
+            wanted="assets/catacombs/boss/asura_baby_mobile.glb"
+            mkdir -p "assets/catacombs/boss"
+            if command -v unzip >/dev/null 2>&1; then
+              unzip -p "$name" "$wanted" > "$wanted"
+            elif command -v jar >/dev/null 2>&1; then
+              jar xf "$name" "$wanted"
+            else
+              echo "No ZIP extractor available in Godot build container" >&2
+              exit 1
+            fi
+            test -s "$wanted"
+            echo "Installed Asura Baby rigged boss GLB:"
+            ls -lh "$wanted"
           else
             echo "Asura boss ZIP not yet uploaded: use temporary in-game boss silhouette"
           fi
