@@ -11,6 +11,24 @@ const FountainMobile = preload("res://scripts/fountain_mobile.gd")
 const TrainingField = preload("res://scripts/city_training.gd")
 const CryptEntrance = preload("res://scripts/city_catacombs_entrance.gd")
 const GregNPC = preload("res://scripts/city_greg_npc.gd")
+# GPU-friendly shared repeating textures for the low-memory Android tablet.
+# Both optional sources can be added without rebuilding any city geometry.
+const COBBLESTONE_TEXTURE_PATH := "res://assets/city/orvethra_cobblestone_mobile.webp"
+const GRASS_TEXTURE_PATH := "res://assets/city/orvethra_grass_mobile.webp"
+const CITY_TEXTURE_SHADER := """
+shader_type spatial;
+render_mode cull_disabled;
+uniform sampler2D ground_texture : source_color, repeat_enable, filter_linear_mipmap;
+uniform vec2 uv_density = vec2(0.125, 0.125);
+varying vec2 surface_uv;
+void vertex() {
+    surface_uv = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xz * uv_density;
+}
+void fragment() {
+    ALBEDO = texture(ground_texture, surface_uv).rgb;
+    ROUGHNESS = 1.0;
+}
+"""
 var player: CharacterBody3D
 var camera: Camera3D
 var yaw := 0.0
@@ -108,6 +126,21 @@ func _make_shader(code: String) -> ShaderMaterial:
     material.shader = shader
     return material
 
+func _mobile_terrain_material(texture_path: String, density: Vector2, fallback_shader: String) -> ShaderMaterial:
+    # The fallback keeps source builds playable before the two optimized
+    # user-provided textures have been uploaded into assets/city/.
+    if not ResourceLoader.exists(texture_path):
+        push_warning("Optional mobile city texture not installed: " + texture_path)
+        return _make_shader(fallback_shader)
+    var tex := load(texture_path) as Texture2D
+    if tex == null:
+        push_warning("Cannot load mobile city texture: " + texture_path)
+        return _make_shader(fallback_shader)
+    var mat := _make_shader(CITY_TEXTURE_SHADER)
+    mat.set_shader_parameter("ground_texture", tex)
+    mat.set_shader_parameter("uv_density", density)
+    return mat
+
 func _plain(hex: String) -> StandardMaterial3D:
     var mat := StandardMaterial3D.new()
     mat.albedo_color = Color(hex)
@@ -137,7 +170,7 @@ func _ground() -> void:
     mesh.size = Vector2(2.0 * MAP_HALF_X + 12.0, 2.0 * MAP_HALF_Z + 12.0)
     floor.mesh = mesh
     floor.position.y = -0.055
-    floor.material_override = _make_shader(GRASS_SHADER)
+    floor.material_override = _mobile_terrain_material(GRASS_TEXTURE_PATH, Vector2(0.15, 0.15), GRASS_SHADER)
     floor.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     add_child(floor)
     var body := StaticBody3D.new()
@@ -238,7 +271,7 @@ func _ring(radius: float, width: float, y: float, material: Material) -> void:
     add_child(obj)
 
 func _layout() -> void:
-    var cobble := _make_shader(STONE_SHADER)
+    var cobble := _mobile_terrain_material(COBBLESTONE_TEXTURE_PATH, Vector2(0.125, 0.375), STONE_SHADER)
     var kerb := _plain("77796f")
     kerb.cull_mode = BaseMaterial3D.CULL_DISABLED
     # Winding old-town road graph based on the approved radial, irregular sketch:

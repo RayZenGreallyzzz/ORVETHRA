@@ -1,4 +1,4 @@
-name: ORVETHRA Crypt Entrance Flush With Pavement v0.24
+name: ORVETHRA Mobile City Textures v0.25
 
 on:
   push:
@@ -146,6 +146,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ORVETHRA-Crypt-Entrance-Ground-v024-Android
+          name: ORVETHRA-Mobile-City-Terrain-v025-Android
           path: build/ORVETHRA-IT801C-debug.apk
           retention-days: 14
