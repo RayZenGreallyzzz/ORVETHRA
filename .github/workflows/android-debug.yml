@@ -1,4 +1,4 @@
-name: ORVETHRA Asura Boss Patrol and Combat v0.30
+name: ORVETHRA Asura Floor Alignment v0.31
 
 on:
   push:
@@ -188,6 +188,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ORVETHRA-Asura-Boss-v030-Android
+          name: ORVETHRA-Asura-Grounded-v031-Android
           path: build/ORVETHRA-IT801C-debug.apk
           retention-days: 14

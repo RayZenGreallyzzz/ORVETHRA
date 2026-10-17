@@ -57,9 +57,11 @@ func _create_visual() -> void:
             visual = scene.instantiate()
             visual.name = "AsuraBabyRig"
             visual.scale = Vector3.ONE * 1.65
-            # Imported idle bounds descend ~0.28m below the model origin.
-            # Lift visual feet onto the boss-room floor without moving AI root.
-            visual.position.y = 0.46
+            # Measured from the actual skinned 6-clip GLB: idle feet
+            # are ~ -0.0093m from the model's root (before 1.65x scale).
+            # The boss root already sits at y=0.03m. Adding a 0.46m visual
+            # offset made the boss float; keep the feet on the stone floor.
+            visual.position.y = 0.0
             visual.rotation.y = PI
             add_child(visual)
             model_installed = true
@@ -93,11 +95,13 @@ func _create_visual() -> void:
             visual.add_child(horn)
     name_label = Label3D.new()
     name_label.name = "AsuraBossNameHP"
-    name_label.text = "АСУРА · БОСС\nHP " + str(hp) + " / " + str(MAX_HP)
-    name_label.font_size = 44
-    name_label.pixel_size = 0.009
-    name_label.position = Vector3(0.0, 3.5, 0.0)
-    name_label.outline_size = 9
+    # Boss HP already has a dedicated bar at the top of the touch HUD.
+    # A single, small overhead name avoids covering the rig and its weapon.
+    name_label.text = "АСУРА"
+    name_label.font_size = 28
+    name_label.pixel_size = 0.007
+    name_label.position = Vector3(0.0, 3.38, 0.0)
+    name_label.outline_size = 6
     name_label.modulate = Color("f3b9a6")
     name_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
     add_child(name_label)
@@ -264,8 +268,6 @@ func receive_damage(amount: int) -> String:
     if _player_point().distance_to(Vector2(position.x, position.z)) > 3.5:
         return "Подойдите к Асуре ближе (до 3,5 м)."
     hp = maxi(0, hp - amount)
-    if name_label != null:
-        name_label.text = "АСУРА · БОСС\nHP " + str(hp) + " / " + str(MAX_HP)
     aggro = true
     if hp == 0:
         dead = true
