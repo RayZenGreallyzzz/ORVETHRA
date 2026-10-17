@@ -56,6 +56,42 @@ var hero_anim: AnimationPlayer
 var hero_animation := ""
 var greg_npc
 
+# Two narrow raised stone curbs per street, a single combined low-poly mesh.
+# Decorative only: no extra physics bodies or independent curb-stone nodes.
+const ROAD_HALF_WIDTH := 4.4
+const CURB_WIDTH := 0.34
+const CURB_HEIGHT_Y := 0.075
+const CURB_BASE_Y := -0.045
+const CURB_PLAZA_CLEARANCE := 17.8
+const CURB_STONE_LENGTH := 1.15
+const CURB_RING_SEGMENTS := 96
+
+const CURB_SHADER := """
+shader_type spatial;
+render_mode unshaded, cull_disabled;
+uniform sampler2D stone_texture : source_color, repeat_enable, filter_linear_mipmap;
+uniform bool has_stone_texture = false;
+varying vec3 city_pos;
+void vertex() {
+    city_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+}
+void fragment() {
+    vec3 stone = vec3(0.47, 0.45, 0.41);
+    if (has_stone_texture) {
+        stone = texture(stone_texture, city_pos.xz * vec2(0.125, 0.375)).rgb;
+    }
+    // A dark narrow joint every 1.15 metres, without separate stone objects.
+    float segment = fract(UV.x / 1.15);
+    float joint = min(segment, 1.0 - segment);
+    float joint_shade = mix(0.43, 1.0, smoothstep(0.012, 0.037, joint));
+    // UV.y distinguishes darker stone sides from a softly lit upper coping.
+    float side = min(UV.y, 1.0 - UV.y);
+    float side_shade = mix(0.58, 0.94, smoothstep(0.0, 0.28, side));
+    float variety = 0.94 + 0.06 * fract(sin(floor(UV.x / 1.15) * 83.17) * 43758.5453);
+    ALBEDO = stone * vec3(0.92, 0.91, 0.87) * joint_shade * side_shade * variety;
+}
+"""
+
 const STONE_SHADER := """
 shader_type spatial;
 render_mode cull_disabled;
@@ -246,34 +282,147 @@ func _disc(radius: float, y: float, material: Material) -> void:
     obj.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     add_child(obj)
 
-func _ring(radius: float, width: float, y: float, material: Material) -> void:
-    var vertices := PackedVector3Array()
-    var indices := PackedInt32Array()
-    for i in range(65):
-        var a := TAU * float(i) / 64.0
-        var sn := sin(a)
-        var cs := cos(a)
-        vertices.append(Vector3(sn * (radius - width * 0.5), y, cs * (radius - width * 0.5)))
-        vertices.append(Vector3(sn * (radius + width * 0.5), y, cs * (radius + width * 0.5)))
+func _curb_material() -> Material:
+    var mat := _make_shader(CURB_SHADER)
+    if ResourceLoader.exists(COBBLESTONE_TEXTURE_PATH):
+        var tex := load(COBBLESTONE_TEXTURE_PATH) as Texture2D
+        if tex != null:
+            mat.set_shader_parameter("stone_texture", tex)
+            mat.set_shader_parameter("has_stone_texture", true)
+    return mat
+
+func _curb_section(vertices: PackedVector3Array, uvs: PackedVector2Array,
+        center: Vector2, outward: Vector2, inset: float, width: float,
+        bottom_y: float, top_y: float, progress: float) -> int:
+    # Four points make the inner face, visible top and outer face.
+    # The same vertices are shared across segments: one mesh for the whole city.
+    var base := vertices.size()
+    var inner: Vector2 = center + outward * inset
+    var outer: Vector2 = center + outward * (inset + width)
+    vertices.append(Vector3(inner.x, bottom_y, inner.y))
+    vertices.append(Vector3(inner.x, top_y, inner.y))
+    vertices.append(Vector3(outer.x, top_y, outer.y))
+    vertices.append(Vector3(outer.x, bottom_y, outer.y))
+    uvs.append(Vector2(progress, 0.0))
+    uvs.append(Vector2(progress, 0.32))
+    uvs.append(Vector2(progress, 0.68))
+    uvs.append(Vector2(progress, 1.0))
+    return base
+
+func _curb_connect(indices: PackedInt32Array, before: int, after: int) -> void:
+    for side in range(3):
+        indices.append_array(PackedInt32Array([
+            before + side, after + side, before + side + 1,
+            after + side, after + side + 1, before + side + 1
+        ]))
+
+func _road_junctions() -> Array[Vector2]:
+    # Skip small lengths of coping where two roads meet: curbs must never
+    # stripe across cross-roads and block the visual mouth of a junction.
+    var points: Array[Vector2] = []
+    for i in range(roads.size()):
+        for j in range(i + 1, roads.size()):
+            for a in roads[i]:
+                for b in roads[j]:
+                    if a.distance_squared_to(b) < 0.25 and a.length() > 19.0:
+                        var known := false
+                        for p in points:
+                            if p.distance_squared_to(a) < 1.0:
+                                known = true
+                                break
+                        if not known:
+                            points.append(a)
+    return points
+
+func _curb_point_allowed(p: Vector2, junctions: Array[Vector2]) -> bool:
+    if p.length_squared() < CURB_PLAZA_CLEARANCE * CURB_PLAZA_CLEARANCE:
+        return false
+    for crossroads in junctions:
+        if p.distance_squared_to(crossroads) < 5.1 * 5.1:
+            return false
+    return true
+
+func _curb_road(vertices: PackedVector3Array, uvs: PackedVector2Array,
+        indices: PackedInt32Array, route: PackedVector2Array,
+        junctions: Array[Vector2]) -> void:
+    var path := _smooth(route)
+    var last_left := -1
+    var last_right := -1
+    var distance_along := 0.0
+    for i in range(path.size()):
         if i > 0:
-            var ix: int = i * 2
-            indices.append_array(PackedInt32Array([ix - 2, ix - 1, ix, ix - 1, ix + 1, ix]))
+            distance_along += path[i].distance_to(path[i - 1])
+        var point: Vector2 = path[i]
+        if not _curb_point_allowed(point, junctions):
+            last_left = -1
+            last_right = -1
+            continue
+        var previous: Vector2 = path[maxi(0, i - 1)]
+        var following: Vector2 = path[mini(path.size() - 1, i + 1)]
+        var tangent: Vector2 = (following - previous).normalized()
+        if tangent.length_squared() < 0.01:
+            last_left = -1
+            last_right = -1
+            continue
+        var normal := Vector2(-tangent.y, tangent.x)
+        var left := _curb_section(vertices, uvs, point, normal,
+            ROAD_HALF_WIDTH - 0.06, CURB_WIDTH, CURB_BASE_Y, CURB_HEIGHT_Y, distance_along)
+        var right := _curb_section(vertices, uvs, point, -normal,
+            ROAD_HALF_WIDTH - 0.06, CURB_WIDTH, CURB_BASE_Y, CURB_HEIGHT_Y, distance_along)
+        if last_left >= 0:
+            _curb_connect(indices, last_left, left)
+            _curb_connect(indices, last_right, right)
+        last_left = left
+        last_right = right
+
+func _curb_ring(vertices: PackedVector3Array, uvs: PackedVector2Array,
+        indices: PackedInt32Array, radius: float, width: float,
+        bottom_y: float, top_y: float) -> void:
+    var previous := -1
+    # Whole number of stone blocks around the circle prevents a texture seam.
+    var block_count := maxi(12, roundi(TAU * radius / CURB_STONE_LENGTH))
+    var repeat_length := float(block_count) * CURB_STONE_LENGTH
+    for i in range(CURB_RING_SEGMENTS + 1):
+        var t := float(i) / float(CURB_RING_SEGMENTS)
+        var angle := TAU * t
+        var outward := Vector2(cos(angle), sin(angle))
+        var center := outward * (radius - width * 0.5)
+        var segment := _curb_section(vertices, uvs, center, outward, 0.0,
+            width, bottom_y, top_y, repeat_length * t)
+        if previous >= 0:
+            _curb_connect(indices, previous, segment)
+        previous = segment
+
+func _stone_city_curbs() -> void:
+    # Mobile optimisation: all road edging + two fountain rings share ONE
+    # surface/material/mesh, without extra draw calls per stone or physics.
+    var vertices := PackedVector3Array()
+    var uvs := PackedVector2Array()
+    var indices := PackedInt32Array()
+    var junctions := _road_junctions()
+    for road in roads:
+        _curb_road(vertices, uvs, indices, road, junctions)
+    _curb_ring(vertices, uvs, indices, 12.4, 0.39, 0.027, 0.087)
+    _curb_ring(vertices, uvs, indices, 6.9, 0.36, 0.038, 0.091)
+    if vertices.is_empty() or indices.is_empty():
+        return
     var arrays: Array = []
     arrays.resize(Mesh.ARRAY_MAX)
     arrays[Mesh.ARRAY_VERTEX] = vertices
+    arrays[Mesh.ARRAY_TEX_UV] = uvs
     arrays[Mesh.ARRAY_INDEX] = indices
     var mesh := ArrayMesh.new()
     mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-    var obj := MeshInstance3D.new()
-    obj.mesh = mesh
-    obj.material_override = material
-    obj.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-    add_child(obj)
+    var visual := MeshInstance3D.new()
+    visual.name = "CityStoneCurbsAndFountainRings"
+    visual.mesh = mesh
+    visual.material_override = _curb_material()
+    visual.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    add_child(visual)
 
 func _layout() -> void:
     var cobble := _mobile_terrain_material(COBBLESTONE_TEXTURE_PATH, Vector2(0.125, 0.375), STONE_SHADER)
-    var kerb := _plain("77796f")
-    kerb.cull_mode = BaseMaterial3D.CULL_DISABLED
+    # Road edges are built as slim 3D stone coping, not flat grey strips.
     # Winding old-town road graph based on the approved radial, irregular sketch:
     # broad central square, branching alleys, no modern rectangular grid.
     roads = [
@@ -294,13 +443,11 @@ func _layout() -> void:
         PackedVector2Array([Vector2(90,94),Vector2(78,78),Vector2(84,44)])
     ]
     for path in roads:
-        _ribbon(path, 10.0, -0.005, kerb)
         _ribbon(path, 8.8, 0.008, cobble)
-    _disc(17.4, 0.014, kerb)
-    _disc(16.7, 0.022, cobble)
-    _ring(12.4, 0.75, 0.034, kerb)
-    _ring(6.9, 0.55, 0.035, kerb)
+    # One consistent paving texture from street to plaza, including the fountain.
+    _disc(17.4, 0.022, cobble)
     _disc(6.0, 0.037, cobble)
+    _stone_city_curbs()
 
 func _character_material(hex: String) -> StandardMaterial3D:
     return _plain(hex)
