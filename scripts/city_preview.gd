@@ -62,7 +62,6 @@ const ROAD_HALF_WIDTH := 4.4
 const CURB_WIDTH := 0.34
 const CURB_HEIGHT_Y := 0.075
 const CURB_BASE_Y := -0.045
-const CURB_PLAZA_CLEARANCE := 17.8
 const CURB_STONE_LENGTH := 1.15
 const CURB_RING_SEGMENTS := 96
 
@@ -316,64 +315,71 @@ func _curb_connect(indices: PackedInt32Array, before: int, after: int) -> void:
             after + side, after + side + 1, before + side + 1
         ]))
 
-func _road_junctions() -> Array[Vector2]:
-    # Skip small lengths of coping where two roads meet: curbs must never
-    # stripe across cross-roads and block the visual mouth of a junction.
-    var points: Array[Vector2] = []
-    for i in range(roads.size()):
-        for j in range(i + 1, roads.size()):
-            for a in roads[i]:
-                for b in roads[j]:
-                    if a.distance_squared_to(b) < 0.25 and a.length() > 19.0:
-                        var known := false
-                        for p in points:
-                            if p.distance_squared_to(a) < 1.0:
-                                known = true
-                                break
-                        if not known:
-                            points.append(a)
-    return points
-
-func _curb_point_allowed(p: Vector2, junctions: Array[Vector2]) -> bool:
-    if p.length_squared() < CURB_PLAZA_CLEARANCE * CURB_PLAZA_CLEARANCE:
-        return false
-    for crossroads in junctions:
-        if p.distance_squared_to(crossroads) < 5.1 * 5.1:
-            return false
-    return true
-
-func _curb_road(vertices: PackedVector3Array, uvs: PackedVector2Array,
-        indices: PackedInt32Array, route: PackedVector2Array,
-        junctions: Array[Vector2]) -> void:
+func _road_surface_polygon(route: PackedVector2Array) -> PackedVector2Array:
+    # Exactly match the 8.8m rendered road ribbon and its smoothed positions.
     var path := _smooth(route)
-    var last_left := -1
-    var last_right := -1
-    var distance_along := 0.0
+    var left := PackedVector2Array()
+    var right := PackedVector2Array()
     for i in range(path.size()):
-        if i > 0:
-            distance_along += path[i].distance_to(path[i - 1])
-        var point: Vector2 = path[i]
-        if not _curb_point_allowed(point, junctions):
-            last_left = -1
-            last_right = -1
-            continue
-        var previous: Vector2 = path[maxi(0, i - 1)]
-        var following: Vector2 = path[mini(path.size() - 1, i + 1)]
-        var tangent: Vector2 = (following - previous).normalized()
-        if tangent.length_squared() < 0.01:
-            last_left = -1
-            last_right = -1
-            continue
+        var before: Vector2 = path[maxi(0, i - 1)]
+        var after: Vector2 = path[mini(path.size() - 1, i + 1)]
+        var tangent: Vector2 = (after - before).normalized()
         var normal := Vector2(-tangent.y, tangent.x)
-        var left := _curb_section(vertices, uvs, point, normal,
-            ROAD_HALF_WIDTH - 0.06, CURB_WIDTH, CURB_BASE_Y, CURB_HEIGHT_Y, distance_along)
-        var right := _curb_section(vertices, uvs, point, -normal,
-            ROAD_HALF_WIDTH - 0.06, CURB_WIDTH, CURB_BASE_Y, CURB_HEIGHT_Y, distance_along)
-        if last_left >= 0:
-            _curb_connect(indices, last_left, left)
-            _curb_connect(indices, last_right, right)
-        last_left = left
-        last_right = right
+        left.append(path[i] + normal * ROAD_HALF_WIDTH)
+        right.append(path[i] - normal * ROAD_HALF_WIDTH)
+    var outline := left
+    for i in range(right.size() - 1, -1, -1):
+        outline.append(right[i])
+    return outline
+
+func _paving_boundary() -> PackedVector2Array:
+    # Construct the UNION of all paving. Every road crossing becomes an
+    # opening in one continuous edge, never a stone curb across the roadway.
+    var merged := PackedVector2Array()
+    for i in range(64):
+        var angle := TAU * float(i) / 64.0
+        merged.append(Vector2(sin(angle), cos(angle)) * 17.4)
+    for road in roads:
+        var result: Array[PackedVector2Array] = Geometry2D.merge_polygons(
+            merged, _road_surface_polygon(road))
+        if result.size() == 1:
+            merged = result[0]
+        else:
+            push_warning("City curb union returned " + str(result.size()) + " polygons")
+    return merged
+
+func _signed_area(polygon: PackedVector2Array) -> float:
+    var area := 0.0
+    for i in range(polygon.size()):
+        var a: Vector2 = polygon[i]
+        var b: Vector2 = polygon[(i + 1) % polygon.size()]
+        area += a.x * b.y - b.x * a.y
+    return area * 0.5
+
+func _curb_paving_outline(vertices: PackedVector3Array, uvs: PackedVector2Array,
+        indices: PackedInt32Array, polygon: PackedVector2Array) -> void:
+    if polygon.size() < 3:
+        return
+    var ccw := _signed_area(polygon) > 0.0
+    var distance_along := 0.0
+    var previous_section := -1
+    for i in range(polygon.size() + 1):
+        var idx := i % polygon.size()
+        var point: Vector2 = polygon[idx]
+        if i > 0:
+            distance_along += polygon[(i - 1) % polygon.size()].distance_to(point)
+        var before: Vector2 = polygon[(idx - 1 + polygon.size()) % polygon.size()]
+        var after: Vector2 = polygon[(idx + 1) % polygon.size()]
+        var tangent: Vector2 = (after - before).normalized()
+        # The exterior of the union always faces the grassy ground.
+        var outward := Vector2(tangent.y, -tangent.x)
+        if not ccw:
+            outward = -outward
+        var section := _curb_section(vertices, uvs, point, outward,
+            -0.035, CURB_WIDTH, CURB_BASE_Y, CURB_HEIGHT_Y, distance_along)
+        if previous_section >= 0:
+            _curb_connect(indices, previous_section, section)
+        previous_section = section
 
 func _curb_ring(vertices: PackedVector3Array, uvs: PackedVector2Array,
         indices: PackedInt32Array, radius: float, width: float,
@@ -399,9 +405,8 @@ func _stone_city_curbs() -> void:
     var vertices := PackedVector3Array()
     var uvs := PackedVector2Array()
     var indices := PackedInt32Array()
-    var junctions := _road_junctions()
-    for road in roads:
-        _curb_road(vertices, uvs, indices, road, junctions)
+    # The exact outer edge of the merged road+plaza footprint, including Y-junctions.
+    _curb_paving_outline(vertices, uvs, indices, _paving_boundary())
     _curb_ring(vertices, uvs, indices, 12.4, 0.39, 0.027, 0.087)
     _curb_ring(vertices, uvs, indices, 6.9, 0.36, 0.038, 0.091)
     if vertices.is_empty() or indices.is_empty():
