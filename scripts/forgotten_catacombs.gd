@@ -49,7 +49,7 @@ var floor_mat: ShaderMaterial
 var masonry_mat: ShaderMaterial
 var guard_mat: StandardMaterial3D
 var wall_art_helper
-var asura_boss: Node3D
+var asura_boss
 var hero_next_attack_ms := 0
 
 const STONE_WALL_SHADER := """

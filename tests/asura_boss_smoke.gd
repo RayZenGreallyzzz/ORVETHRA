@@ -5,11 +5,11 @@ func _initialize() -> void:
     call_deferred("_test")
 
 func _test() -> void:
-    var scene: Node3D = load("res://scenes/forgotten_catacombs.tscn").instantiate()
+    var scene = load("res://scenes/forgotten_catacombs.tscn").instantiate()
     root.add_child(scene)
     await process_frame
     assert(scene.asura_boss != null, "Missing Asura in boss hall")
-    var boss: Node3D = scene.asura_boss
+    var boss = scene.asura_boss
     assert(boss.hp == boss.MAX_HP)
     assert(Vector2(boss.position.x, boss.position.z).distance_to(Vector2(-17.0, -47.5)) < 0.3)
     scene.player.position = Vector3(-17.0, 0.2, -51.0)
