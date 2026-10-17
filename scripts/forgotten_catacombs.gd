@@ -1,6 +1,7 @@
 extends "res://scripts/city_preview.gd"
 
 const WallArtwork = preload("res://scripts/catacombs_wall_art.gd")
+const AsuraBoss = preload("res://scripts/catacombs_asura_boss.gd")
 
 # ORVETHRA / Forgotten Catacombs: approved 5 small, 7 large, 1 boss layout.
 # One Godot unit = one metre. 4m gross = ~3.5m clear with perimeter colliders.
@@ -48,6 +49,8 @@ var floor_mat: ShaderMaterial
 var masonry_mat: ShaderMaterial
 var guard_mat: StandardMaterial3D
 var wall_art_helper
+var asura_boss: Node3D
+var hero_next_attack_ms := 0
 
 const STONE_WALL_SHADER := """
 shader_type spatial;
@@ -100,7 +103,32 @@ func _ready() -> void:
     city_hud = preload("res://scripts/catacombs_hud.gd").new()
     city_hud.game = self
     add_child(city_hud)
+    _spawn_asura_boss()
     _update_camera()
+
+func _spawn_asura_boss() -> void:
+    # The 25x25 metre final room contains a patrolling Asura Baby.
+    # If the opt-in GLB pack isn't uploaded, a lightweight placeholder
+    # keeps AI, targeting, touch controls and dungeon exits testable.
+    asura_boss = AsuraBoss.new()
+    asura_boss.game = self
+    add_child(asura_boss)
+
+func _try_attack() -> void:
+    if asura_boss == null or city_hud == null or player == null:
+        return
+    var now := Time.get_ticks_msec()
+    if now < hero_next_attack_ms:
+        return
+    hero_next_attack_ms = now + 640
+    var feedback: String = asura_boss.receive_damage(12)
+    city_hud.show_combat_message(feedback)
+    if asura_boss.dead:
+        city_hud.on_asura_victory()
+
+func _on_asura_attack(amount: int) -> void:
+    if city_hud != null and city_hud.has_method("receive_boss_hit"):
+        city_hud.receive_boss_hit(amount)
 
 func _update_camera() -> void:
     if camera == null or player == null:

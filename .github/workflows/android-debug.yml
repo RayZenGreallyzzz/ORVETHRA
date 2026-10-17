@@ -1,4 +1,4 @@
-name: ORVETHRA Slime Training Combat and Ground v0.29
+name: ORVETHRA Asura Boss Patrol and Combat v0.30
 
 on:
   push:
@@ -25,6 +25,31 @@ jobs:
             python3 -c 'import zipfile; p="ORVETHRA_Catacombs_Optimized_5_GLBS.zip"; z=zipfile.ZipFile(p); wanted=[n for n in z.namelist() if n.startswith("assets/catacombs/") and n.endswith("_mobile.glb") and ".." not in n]; assert len(wanted)==5; z.extractall(".",members=wanted); print("Installed mobile GLBs:",wanted)'
           else
             echo "Optional catacomb model archive not uploaded: keep lightweight placeholders"
+          fi
+      - name: Install optional Asura boss GLB
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f ORVETHRA_Asura_Boss_Android.zip ]; then
+            python3 - <<'PY'
+          import zipfile, os
+          name = "ORVETHRA_Asura_Boss_Android.zip"
+          wanted = "assets/catacombs/boss/asura_baby_mobile.glb"
+          with zipfile.ZipFile(name) as z:
+              assert wanted in z.namelist(), f"Missing {wanted}"
+              info = z.getinfo(wanted)
+              assert info.file_size > 1000000, "Unexpectedly tiny boss asset"
+              os.makedirs(os.path.dirname(wanted), exist_ok=True)
+              with z.open(info) as src, open(wanted, "wb") as dst:
+                  while True:
+                      chunk = src.read(1024 * 1024)
+                      if not chunk:
+                          break
+                      dst.write(chunk)
+          print("Installed Asura Baby rigged boss GLB:", wanted)
+          PY
+          else
+            echo "Asura boss ZIP not yet uploaded: use temporary in-game boss silhouette"
           fi
       - name: Unpack rigged character models
         shell: bash
@@ -147,6 +172,15 @@ jobs:
           if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call|Invalid get index' build/training-arena-check.log; then
             exit 1
           fi
+      - name: Validate Asura boss scene and melee interaction
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 90 godot --headless --path . --script res://tests/asura_boss_smoke.gd 2>&1 | tee build/asura-boss-test.log
+          grep -q 'ASURA_BOSS_TEST_OK' build/asura-boss-test.log
+          if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call|Invalid get index' build/asura-boss-test.log; then
+            exit 1
+          fi
       - name: Export signed debug test APK
         shell: bash
         run: |
@@ -157,6 +191,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ORVETHRA-Training-Combat-v029-Android
+          name: ORVETHRA-Asura-Boss-v030-Android
           path: build/ORVETHRA-IT801C-debug.apk
           retention-days: 14
