@@ -23,7 +23,7 @@ func _run() -> void:
     editor.rotate_by(30.0)
     editor._refresh_preview()
     assert(editor.is_valid, "Expected empty placement plot")
-    var previous := editor.saved.size()
+    var previous: int = editor.saved.size()
     editor.confirm()
     assert(editor.saved.size() == previous + 1, "Lock must add a building")
     editor.select_at(Vector2(91.0, -79.0))
