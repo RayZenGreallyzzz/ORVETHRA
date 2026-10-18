@@ -11,6 +11,7 @@ const FountainMobile = preload("res://scripts/fountain_mobile.gd")
 const TrainingField = preload("res://scripts/city_training.gd")
 const CryptEntrance = preload("res://scripts/city_catacombs_entrance.gd")
 const GregNPC = preload("res://scripts/city_greg_npc.gd")
+const CityWorldBuilder = preload("res://scripts/city_world_builder.gd")
 # GPU-friendly shared repeating textures for the low-memory Android tablet.
 # Both optional sources can be added without rebuilding any city geometry.
 const COBBLESTONE_TEXTURE_PATH := "res://assets/city/orvethra_cobblestone_mobile.webp"
@@ -55,6 +56,7 @@ var hero_visual: Node3D
 var hero_anim: AnimationPlayer
 var hero_animation := ""
 var greg_npc
+var world_builder
 
 # Two narrow raised stone curbs per street, a single combined low-poly mesh.
 # Decorative only: no extra physics bodies or independent curb-stone nodes.
@@ -152,6 +154,7 @@ func _ready() -> void:
         get_tree().remove_meta("orvethra_return_from_catacombs")
         player.position = Vector3(85.3, 0.12, 87.7)
     _interface()
+    _world_builder()
     _update_camera()
 
 func _make_shader(code: String) -> ShaderMaterial:
@@ -679,6 +682,9 @@ func _reset_camera_distance() -> void:
     _update_camera()
 
 func _input(event: InputEvent) -> void:
+    if world_builder != null and world_builder.active:
+        touch_id = -1
+        return
     # Godot dispatches _input before GUI controls. Never use a menu swipe
     # to rotate the third-person camera, even on emulated touch/mouse input.
     if city_hud != null and city_hud.is_popup_open():
@@ -708,6 +714,8 @@ func _drag_view(diff: Vector2) -> void:
         pitch = clampf(pitch + diff.y * 0.004, 0.15, 0.92)
 
 func _move_direction() -> Vector2:
+    if world_builder != null and world_builder.active:
+        return Vector2.ZERO
     # Opening a modal menu also releases movement from the on-screen joystick.
     if city_hud != null and city_hud.is_popup_open():
         return Vector2.ZERO
@@ -827,12 +835,23 @@ func _training_area() -> void:
     training.game = self
     add_child(training)
 
+func _world_builder() -> void:
+    world_builder = CityWorldBuilder.new()
+    world_builder.game = self
+    add_child(world_builder)
+
+func _toggle_world_builder() -> void:
+    if world_builder != null:
+        world_builder.set_active(not world_builder.active)
+
 func _interface() -> void:
     city_hud = preload("res://scripts/city_hud.gd").new()
     city_hud.game = self
     add_child(city_hud)
 
 func _toggle_overview() -> void:
+    if world_builder != null and world_builder.active:
+        return
     overview = not overview
     if overview:
         overview_center = Vector2(player.position.x, player.position.z)

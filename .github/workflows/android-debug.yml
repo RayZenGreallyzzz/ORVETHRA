@@ -1,4 +1,4 @@
-name: ORVETHRA Asura Floor Alignment v0.31
+name: ORVETHRA In-Game City Building Editor v0.32
 
 on:
   push:
@@ -47,6 +47,23 @@ jobs:
             ls -lh "$wanted"
           else
             echo "Asura boss ZIP not yet uploaded: use temporary in-game boss silhouette"
+          fi
+      - name: Install optional 5 optimized city buildings
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="ORVETHRA_5_Buildings_Android_Optimized.zip"
+          if [ -f "$archive" ]; then
+            mkdir -p assets/city/buildings
+            for item in auction_hall blacksmith tavern ivyglow_manor enchanted_ivy_village; do
+              path="assets/city/buildings/${item}_mobile.glb"
+              unzip -p "$archive" "$path" > "$path"
+              test -s "$path"
+            done
+            echo "Five optimized city buildings installed:"
+            ls -lh assets/city/buildings/*.glb
+          else
+            echo "Optional building ZIP not yet uploaded, editor uses clearly marked proxies"
           fi
       - name: Unpack rigged character models
         shell: bash
@@ -178,6 +195,15 @@ jobs:
           if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call|Invalid get index' build/asura-boss-test.log; then
             exit 1
           fi
+      - name: Validate in-game World Builder and building duplication
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 110 godot --headless --path . --script res://tests/world_builder_smoke.gd 2>&1 | tee build/world-builder-test.log
+          grep -q 'WORLD_BUILDER_TEST_OK' build/world-builder-test.log
+          if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call|Invalid get index|ERROR: Failed loading' build/world-builder-test.log; then
+            exit 1
+          fi
       - name: Export signed debug test APK
         shell: bash
         run: |
@@ -188,6 +214,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ORVETHRA-Asura-Grounded-v031-Android
+          name: ORVETHRA-World-Builder-v032-Android
           path: build/ORVETHRA-IT801C-debug.apk
           retention-days: 14

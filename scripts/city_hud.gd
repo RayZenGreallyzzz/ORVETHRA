@@ -434,9 +434,15 @@ func _open_menu() -> void:
     _popup_button("Инвентарь (тест)", func() -> void: _open_notice("Пока доступно 5 тестовых зелий.\nЭкипировка будет подключена отдельно."))
     _popup_button("Журнал заданий", _open_quest)
     _popup_button("Карта города / Пешком", _switch_map)
+    _popup_button("✦ Редактор города · здания", _open_world_builder)
     _popup_button("Настройки управления", _open_game_settings)
     _popup_button("Главное меню", _go_home)
     _popup_button("Закрыть", _close_popup)
+
+func _open_world_builder() -> void:
+    _close_popup()
+    if game != null:
+        game._toggle_world_builder()
 
 func _open_game_settings() -> void:
     _show_popup()
