@@ -1,4 +1,4 @@
-name: ORVETHRA In-Game City Building Editor v0.32
+name: ORVETHRA Modular Manor Builder v0.33
 
 on:
   push:
@@ -204,6 +204,15 @@ jobs:
           if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call|Invalid get index|ERROR: Failed loading' build/world-builder-test.log; then
             exit 1
           fi
+      - name: Validate modular mansion construction and offline blueprints
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 110 godot --headless --path . --script res://tests/modular_builder_smoke.gd 2>&1 | tee build/modular-builder-test.log
+          grep -q 'MODULAR_BUILDER_TEST_OK' build/modular-builder-test.log
+          if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call|Invalid get index|ERROR: Failed loading' build/modular-builder-test.log; then
+            exit 1
+          fi
       - name: Export signed debug test APK
         shell: bash
         run: |
@@ -214,6 +223,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ORVETHRA-World-Builder-v032-Android
+          name: ORVETHRA-Modular-Manor-v033-Android
           path: build/ORVETHRA-IT801C-debug.apk
           retention-days: 14

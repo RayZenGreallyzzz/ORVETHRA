@@ -1,5 +1,6 @@
 extends Node3D
 
+const ModularEditor = preload("res://scripts/city_modular_builder.gd")
 # Local/offline ORVETHRA city layout editor. Buildings are saved as transforms,
 # not baked into the city scene, so existing roads/quests remain untouched.
 const SAVE_PATH := "user://orvethra_city_layout_v1.json"
@@ -16,6 +17,7 @@ const PREFABS := {
     "village": {"name": "Деревенские дома", "file": "enchanted_ivy_village_mobile.glb", "width": 13.0}
 }
 var game
+var modular_editor
 var active := false
 var previous_overview := false
 var previous_height := 185.0
@@ -47,6 +49,10 @@ func _ready() -> void:
     _load_layout()
     _rebuild()
     _create_ui()
+    modular_editor = ModularEditor.new()
+    modular_editor.game = game
+    modular_editor.host = self
+    add_child(modular_editor)
     _ui_visible(false)
 
 func _tint(color: Color) -> StandardMaterial3D:
@@ -228,6 +234,8 @@ func _push_history() -> void:
 func set_active(enabled: bool) -> void:
     if active == enabled:
         return
+    if modular_editor != null and modular_editor.active:
+        modular_editor.set_active(false)
     cancel()
     active = enabled
     _ui_visible(enabled)
@@ -248,6 +256,19 @@ func set_active(enabled: bool) -> void:
         game.touch_id = -1
     game._update_camera()
 
+func open_modular() -> void:
+    if not active:
+        set_active(true)
+    if modular_editor != null:
+        ui.visible = false
+        modular_editor.set_active(true)
+
+func close_modular() -> void:
+    if modular_editor != null:
+        modular_editor.set_active(false)
+    if ui != null:
+        ui.visible = active
+
 func _create_ui() -> void:
     hud_layer = CanvasLayer.new()
     hud_layer.layer = 15
@@ -264,6 +285,7 @@ func _create_ui() -> void:
     var catalog := VBoxContainer.new()
     catalog.custom_minimum_size.x = 206
     scroll.add_child(catalog)
+    _add_button(catalog, "🧱 СОБРАТЬ ОСОБНЯК", open_modular)
     for key in ORDER:
         var id: String = key
         _add_button(catalog, _type_name(id), func() -> void: begin(id))
@@ -519,7 +541,7 @@ func _pan(delta: Vector2) -> void:
     game._update_camera()
 
 func _unhandled_input(event: InputEvent) -> void:
-    if not active:
+    if not active or (modular_editor != null and modular_editor.active):
         return
     if event is InputEventScreenTouch:
         if event.pressed:

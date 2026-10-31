@@ -45,3 +45,8 @@ GitHub Actions запускается после коммита в `main`. Не 
 Сначала APK, входы в здания, стабильный FPS и тач-управление. После теста: оптимизированный город, внешняя карта, монстры, питомцы с картами и подземелья.
 
 © Авторы проекта ORVETHRA. Пока приватных ключей подписи нет; только тестовый debug APK.
+
+
+## ORVETHRA Modular Manor Builder (Android v0.33)
+
+From the city choose **☰ → 🧱 Конструктор особняка · детали**. The editor uses **17 built-in original modular pieces** (foundation, stone/wood floors, ceiling, balcony, stone/timber walls, door and window walls, arch, railing, pitched/flat roofs, ridge, stair, pillar, chimney). Touch the map to snap pieces to a 3 m grid; use 90° rotation, floor up/down (six levels), green/red ghost placement, copy, delete, undo/redo, roof hide, and floor isolation. Tap ✓ Закрепить to persist the change. Blueprints are saved automatically in `user://orvethra_modular_city_v1.json`, separate from `user://orvethra_city_layout_v1.json`, and reload on game startup. This **prototype works offline without imported GLBs**. Static repeated meshes are drawn in MultiMesh batches, with simple collision geometry; later iterations will add supporting checks, roof snap/room systems, stair navigation polish and polished 3D architectural assets. The earlier whole-building editor remains available under **Редактор города · здания**.

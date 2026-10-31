@@ -844,6 +844,10 @@ func _toggle_world_builder() -> void:
     if world_builder != null:
         world_builder.set_active(not world_builder.active)
 
+func _open_modular_builder() -> void:
+    if world_builder != null:
+        world_builder.open_modular()
+
 func _interface() -> void:
     city_hud = preload("res://scripts/city_hud.gd").new()
     city_hud.game = self
