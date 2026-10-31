@@ -460,8 +460,8 @@ func _make_ui() -> void:
     buttons = GridContainer.new()
     buttons.columns = 5
     toolbar.add_child(buttons)
-    _button(buttons, "◀ Повернуть", func() -> void: rotate(-1))
-    _button(buttons, "Повернуть ▶", func() -> void: rotate(1))
+    _button(buttons, "◀ Повернуть", func() -> void: rotate_piece(-1))
+    _button(buttons, "Повернуть ▶", func() -> void: rotate_piece(1))
     _button(buttons, "Этаж −", func() -> void: change_floor(-1))
     _button(buttons, "Этаж +", func() -> void: change_floor(1))
     _button(buttons, "🔍 Камера", func() -> void: zoom(-10.0))
@@ -575,7 +575,7 @@ func duplicate_piece() -> void:
     _new_preview()
     _status("Копия создана. Оригинал на месте. Передвинь копию и закрепи.")
 
-func rotate(steps: int) -> void:
+func rotate_piece(steps: int) -> void:
     if preview == null:
         _status("Сначала выбери деталь.")
         return

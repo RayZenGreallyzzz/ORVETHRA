@@ -60,7 +60,7 @@ func _run() -> void:
     editor.candidate["gz"] = gz
     editor._refresh_ghost()
     _assert(not editor.acceptable, "Overlapping walls must be rejected")
-    editor.rotate(1)
+    editor.rotate_piece(1)
     _assert(editor.acceptable, "Door on adjacent wall edge must be allowed")
     editor.confirm()
     _assert(editor.items.size() == start + 3, "Door was not placed")
