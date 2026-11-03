@@ -1,0 +1,22 @@
+name: Launcher scene smoke test
+on:
+  push:
+    branches: [feature/android-training-client-v1]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  launcher:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate launcher script and startup scene
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 90 godot --headless --path . --script res://tests/launcher_smoke.gd 2>&1 | tee /tmp/launcher.log
+          grep -q 'LAUNCHER_SMOKE_OK' /tmp/launcher.log
+          if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call|Assertion failed' /tmp/launcher.log; then exit 1; fi
