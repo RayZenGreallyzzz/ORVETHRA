@@ -436,7 +436,10 @@ func _make_ui() -> void:
     title.text = "🏰 БЕЛЫЕ МОДУЛИ"
     title.add_theme_font_size_override("font_size", 17)
     choices.add_child(title)
-    _button(choices, "🏠 Построить белый дом", build_white_house)
+    _button(choices, "🏠 Белый жилой дом", func() -> void: build_white_building("house"))
+    _button(choices, "⚒ Белая кузница", func() -> void: build_white_building("smith"))
+    _button(choices, "🍺 Белая таверна", func() -> void: build_white_building("tavern"))
+    _button(choices, "⚖ Белый аукцион", func() -> void: build_white_building("auction"))
     for category in ["Основание", "Стены", "Крыша", "Детали"]:
         var label := Label.new()
         label.text = "── " + category + " ──"
@@ -747,33 +750,72 @@ func _unhandled_input(event: InputEvent) -> void:
         get_viewport().set_input_as_handled()
 
 
-# Construct a simple 9x9m one-storey white shell from original modular pieces.
-# No old building GLBs, decoration or network access are involved.
-# Existing player constructions are never cleared or overwritten.
-func build_white_house() -> void:
-    if items.size() + 34 > MAX_PIECES:
-        _status("Недостаточно места для дома: предел деталей.")
+
+# Original, undecorated MMO town shells. Each building is made of editable
+# 3m modules, with walkable openings and separate upper-floor decks.
+# Do not touch existing saved layouts or import old compressed GLB buildings.
+func _white_building_parts(kind: String, ox: int, oz: int) -> Array[Dictionary]:
+    var width := 3
+    var depth := 3
+    var storeys := 1
+    match kind:
+        "smith":
+            width = 4
+            depth = 3
+        "tavern":
+            width = 4
+            depth = 4
+            storeys = 2
+        "auction":
+            width = 5
+            depth = 4
+            storeys = 2
+    var result: Array[Dictionary] = []
+    for level in range(storeys):
+        for z in range(depth):
+            for x in range(width):
+                result.append(_entry("foundation" if level == 0 else "stone_floor", ox + x, oz + z, level))
+                if level == storeys - 1:
+                    result.append(_entry("roof_flat", ox + x, oz + z, level))
+        for x in range(width):
+            var front_type := "window_wall"
+            if level == 0 and x == int(width / 2):
+                front_type = "door_wall"
+            elif level == 0 and kind == "auction" and x == int(width / 2) - 1:
+                front_type = "arch"
+            result.append(_entry(front_type, ox + x, oz, level, 0))
+            result.append(_entry("window_wall" if x % 2 == 1 else "stone_wall", ox + x, oz + depth - 1, level, 2))
+        for z in range(depth):
+            result.append(_entry("stone_wall" if z % 2 == 0 else "window_wall", ox, oz + z, level, 3))
+            result.append(_entry("stone_wall" if z % 2 == 0 else "window_wall", ox + width - 1, oz + z, level, 1))
+    # Parapet is a separate wall-slot tier above the roof, leaving the roof deck intact.
+    if kind == "auction":
+        for x in range(width):
+            result.append(_entry("railing", ox + x, oz, storeys, 0))
+            result.append(_entry("railing", ox + x, oz + depth - 1, storeys, 2))
+        for z in range(depth):
+            result.append(_entry("railing", ox, oz + z, storeys, 3))
+            result.append(_entry("railing", ox + width - 1, oz + z, storeys, 1))
+    # Roof chimney is a separate accessory, not a wall or deck replacement.
+    if kind == "smith" or kind == "tavern":
+        result.append(_entry("chimney", ox + width - 1, oz + depth - 1, storeys - 1))
+    return result
+
+func build_white_building(kind: String) -> void:
+    if not ["house", "smith", "tavern", "auction"].has(kind):
         return
     cancel()
     var origin := Vector2i(999, 999)
-    # Search near the city outskirts, without changing roads or the fountain.
-    for gz in range(-25, 26, 5):
+    var chosen: Array[Dictionary] = []
+    # Leave roads, the fountain and previously placed player buildings alone.
+    for gz in range(-27, 28, 3):
         if origin.x != 999:
             break
-        for gx in range(-30, 31, 5):
-            var planned: Array[Dictionary] = []
-            for z in range(3):
-                for x in range(3):
-                    planned.append(_entry("foundation", gx + x, gz + z, 0))
-                    planned.append(_entry("roof_flat", gx + x, gz + z, 0))
-            for x in range(3):
-                planned.append(_entry("window_wall", gx + x, gz, 0, 0))
-                planned.append(_entry("window_wall", gx + x, gz + 2, 0, 2))
-            for z in range(3):
-                planned.append(_entry("stone_wall", gx, gz + z, 0, 3))
-                planned.append(_entry("stone_wall", gx + 2, gz + z, 0, 1))
-            # Door replaces the middle wall on the front.
-            planned[20] = _entry("door_wall", gx + 1, gz, 0, 0)
+        for gx in range(-32, 33, 3):
+            var planned := _white_building_parts(kind, gx, gz)
+            if items.size() + planned.size() > MAX_PIECES:
+                _status("Не хватает лимита модулей для нового здания.")
+                return
             var valid := true
             for d in planned:
                 if not _position_ok(d):
@@ -781,24 +823,17 @@ func build_white_house() -> void:
                     break
             if valid:
                 origin = Vector2i(gx, gz)
+                chosen = planned
                 break
     if origin.x == 999:
-        _status("Нет свободного участка 9×9 м. Освободи площадку рядом с городом.")
+        _status("Не найден свободный участок для здания. Проверь дороги и границы карты.")
         return
-    var pieces: Array[Dictionary] = []
-    for z in range(3):
-        for x in range(3):
-            pieces.append(_entry("foundation", origin.x + x, origin.y + z, 0))
-            pieces.append(_entry("roof_flat", origin.x + x, origin.y + z, 0))
-    for x in range(3):
-        pieces.append(_entry("door_wall" if x == 1 else "window_wall", origin.x + x, origin.y, 0, 0))
-        pieces.append(_entry("window_wall", origin.x + x, origin.y + 2, 0, 2))
-    for z in range(3):
-        pieces.append(_entry("stone_wall", origin.x, origin.y + z, 0, 3))
-        pieces.append(_entry("stone_wall", origin.x + 2, origin.y + z, 0, 1))
     _push_undo()
-    items.append_array(pieces)
+    items.append_array(chosen)
     floor_level = 0
     _rebuild()
     var saved_ok := _save()
-    _status("Белый дом 9×9 м построен: %d модулей. %s" % [pieces.size(), "Сохранено." if saved_ok else "Ошибка сохранения!"])
+    _status("Белое здание: %d модулей, X=%d Z=%d. %s" % [chosen.size(), origin.x, origin.y, "Сохранено." if saved_ok else "Ошибка сохранения!"])
+
+func build_white_house() -> void:
+    build_white_building("house")
