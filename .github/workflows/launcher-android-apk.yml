@@ -1,0 +1,228 @@
+name: ORVETHRA Launcher Android debug
+
+on:
+  push:
+    branches: [feature/android-training-client-v1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - name: Checkout ORVETHRA
+        uses: actions/checkout@v4
+      - name: Install optional optimized catacomb meshes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f ORVETHRA_Catacombs_Optimized_5_GLBS.zip ]; then
+            python3 -c 'import zipfile; p="ORVETHRA_Catacombs_Optimized_5_GLBS.zip"; z=zipfile.ZipFile(p); wanted=[n for n in z.namelist() if n.startswith("assets/catacombs/") and n.endswith("_mobile.glb") and ".." not in n]; assert len(wanted)==5; z.extractall(".",members=wanted); print("Installed mobile GLBs:",wanted)'
+          else
+            echo "Optional catacomb model archive not uploaded: keep lightweight placeholders"
+          fi
+      - name: Install optional Asura boss GLB
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f ORVETHRA_Asura_Boss_Android.zip ]; then
+            name="ORVETHRA_Asura_Boss_Android.zip"
+            wanted="assets/catacombs/boss/asura_baby_mobile.glb"
+            mkdir -p "assets/catacombs/boss"
+            if command -v unzip >/dev/null 2>&1; then
+              unzip -p "$name" "$wanted" > "$wanted"
+            elif command -v jar >/dev/null 2>&1; then
+              jar xf "$name" "$wanted"
+            else
+              echo "No ZIP extractor available in Godot build container" >&2
+              exit 1
+            fi
+            test -s "$wanted"
+            echo "Installed Asura Baby rigged boss GLB:"
+            ls -lh "$wanted"
+          else
+            echo "Asura boss ZIP not yet uploaded: use temporary in-game boss silhouette"
+          fi
+      - name: Install optional 5 optimized city buildings
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="ORVETHRA_5_Buildings_Android_Optimized.zip"
+          if [ -f "$archive" ]; then
+            mkdir -p assets/city/buildings
+            for item in auction_hall blacksmith tavern ivyglow_manor enchanted_ivy_village; do
+              path="assets/city/buildings/${item}_mobile.glb"
+              unzip -p "$archive" "$path" > "$path"
+              test -s "$path"
+            done
+            echo "Five optimized city buildings installed:"
+            ls -lh assets/city/buildings/*.glb
+          else
+            echo "Optional building ZIP not yet uploaded, editor uses clearly marked proxies"
+          fi
+      - name: Unpack rigged character models
+        shell: bash
+        run: |
+          set -euo pipefail
+          for folder in assets/characters/roster_parts/*; do
+            [ -d "$folder" ] || continue
+            id="${folder##*/}"
+            cat "$folder"/*.b64 | base64 --decode > "assets/characters/roster/${id}_mobile.glb.gz"
+            gzip -t "assets/characters/roster/${id}_mobile.glb.gz"
+          done
+          if compgen -G 'assets/characters/roster/*.glb.gz' > /dev/null; then
+            for file in assets/characters/roster/*.glb.gz; do
+              gzip -t "$file"
+              gzip -dc "$file" > "${file%.gz}"
+              test -s "${file%.gz}"
+            done
+          fi
+          echo "Animated character models unpacked:"
+          ls -lh assets/characters/roster/*.glb 2>/dev/null || true
+      - name: Verify committed Godot source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s assets/title_cover.jpg
+          test -s scripts/main_menu.gd
+          test -s scripts/town.gd
+          test -s scripts/combat.gd
+          test -s scenes/combat.tscn
+          test -s scenes/city_preview.tscn
+          test -s scripts/city_preview.gd
+          test -s assets/city/training_grass_earth_mobile.webp
+          test -s assets/city/training_worn_gravel_mobile.webp
+          test -s assets/characters/ORVETHRA_NeonAlleycat_Animated_Mobile.glb
+          test -s assets/fountain/guardian_fountain_mobile.bin
+          test -s scripts/fountain_mobile.gd
+          test -s scripts/catacombs_wall_art.gd
+          test -s assets/catacombs/tiles/wall_guard_mobile.webp
+          test -s assets/catacombs/tiles/wall_stone_mobile.webp
+          test -s assets/catacombs/tiles/floor_stone_mobile.webp
+          test -s assets/catacombs/decor/angel_sword_statue_mobile.webp
+          test -s assets/catacombs/decor/crimson_skull_banner_mobile.webp
+          test -s assets/catacombs/decor/crimson_rune_banner_mobile.webp
+          test -s assets/catacombs/decor/golden_chain_mobile.webp
+          grep -q 'res://scenes/launcher_entry.tscn' project.godot
+          echo "Verified ORVETHRA animated hero + plaza fountain test source"
+          mkdir -p build
+          if ! grep -q '^textures/vram_compression/import_etc2_astc=true' project.godot; then
+            sed -i '/^\[rendering\]/a textures/vram_compression/import_etc2_astc=true' project.godot
+          fi
+          if ! grep -q '^keystore/debug=' export_presets.cfg; then
+            printf '\nkeystore/debug="/root/debug.keystore"\nkeystore/debug_user="androiddebugkey"\nkeystore/debug_password="android"\n' >> export_presets.cfg
+          fi
+      - name: Setup Godot export templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/share/godot/export_templates" "$HOME/.config/godot"
+          if [ -d /root/.local/share/godot/export_templates ]; then
+            cp -a /root/.local/share/godot/export_templates/. "$HOME/.local/share/godot/export_templates/" || true
+          fi
+          if [ -d /root/.config/godot ]; then
+            cp -a /root/.config/godot/. "$HOME/.config/godot/" || true
+          fi
+          godot --version
+          ls -l /root/debug.keystore || true
+          find "$HOME/.local/share/godot/export_templates" -maxdepth 2 -type f | head -10 || true
+      - name: Import and validate project
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --editor --import --quit 2>&1 | tee build/import.log
+          if grep -E 'SCRIPT ERROR|Parse Error:|ERROR: Cannot open' build/import.log; then
+            echo "Godot import or GDScript error"
+            exit 1
+          fi
+      - name: Probe animated foot and head bone positions
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 100 godot --headless --path . --script res://tests/probe_character_feet.gd 2>&1 | tee build/actor-feet-probe.log
+          if grep -E 'SCRIPT ERROR|Parse Error:' build/actor-feet-probe.log; then
+            exit 1
+          fi
+      - name: Validate nine playable heroes at 1.75m plus stationary Greg NPC
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 100 godot --headless --path . --script res://tests/character_world_scale.gd 2>&1 | tee build/character-size-check.log
+          grep -q 'ROSTER_TEST_TOTAL checked=9 failures=0' build/character-size-check.log
+          if grep -E 'SCRIPT ERROR|Parse Error:' build/character-size-check.log; then
+            echo "Character-size validation failed"
+            exit 1
+          fi
+      - name: Check city scene starts headlessly
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 55 godot --headless --path . res://scenes/city_preview.tscn --quit-after 3 2>&1 | tee build/city-check.log
+          if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call|ERROR: Failed loading' build/city-check.log; then
+            echo "City scene runtime error"
+            exit 1
+          fi
+      - name: Check catacombs scene starts headlessly
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s scenes/forgotten_catacombs.tscn
+          timeout 55 godot --headless --path . res://scenes/forgotten_catacombs.tscn --quit-after 3 2>&1 | tee build/catacombs-check.log
+          if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call|Invalid get index|ERROR: Failed loading' build/catacombs-check.log; then
+            echo "Catacombs scene runtime error"
+            exit 1
+          fi
+      - name: Validate training arena terrain and slime spawn
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 80 godot --headless --path . --script res://tests/training_arena_smoke.gd 2>&1 | tee build/training-arena-check.log
+          grep -q 'TRAINING_ARENA_OK' build/training-arena-check.log
+          if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call|Invalid get index' build/training-arena-check.log; then
+            exit 1
+          fi
+      - name: Validate Asura boss scene and melee interaction
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 90 godot --headless --path . --script res://tests/asura_boss_smoke.gd 2>&1 | tee build/asura-boss-test.log
+          grep -q 'ASURA_BOSS_TEST_OK' build/asura-boss-test.log
+          if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call|Invalid get index' build/asura-boss-test.log; then
+            exit 1
+          fi
+      - name: Validate in-game World Builder and building duplication
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 110 godot --headless --path . --script res://tests/world_builder_smoke.gd 2>&1 | tee build/world-builder-test.log
+          grep -q 'WORLD_BUILDER_TEST_OK' build/world-builder-test.log
+          if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call|Invalid get index|ERROR: Failed loading' build/world-builder-test.log; then
+            exit 1
+          fi
+      - name: Validate modular mansion construction and offline blueprints
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 110 godot --headless --path . --script res://tests/modular_builder_smoke.gd 2>&1 | tee build/modular-builder-test.log
+          grep -q 'MODULAR_BUILDER_TEST_OK' build/modular-builder-test.log
+          if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call|Invalid get index|ERROR: Failed loading' build/modular-builder-test.log; then
+            exit 1
+          fi
+      - name: Export signed debug test APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --verbose --path . --export-debug Android build/ORVETHRA-IT801C-debug.apk
+          test -s build/ORVETHRA-IT801C-debug.apk
+          ls -lh build/ORVETHRA-IT801C-debug.apk
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ORVETHRA-Launcher-Android-debug
+          path: build/ORVETHRA-IT801C-debug.apk
+          retention-days: 14
