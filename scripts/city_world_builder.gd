@@ -10,7 +10,7 @@ const LIMIT := 70
 const GRID := 0.5
 # Only individual landmark references are offered for new construction.
 # The long combined village strip remains loadable for older saves, but cannot be placed anew.
-const ORDER := ["auction", "blacksmith", "tavern", "manor"]
+const ORDER := ["auction", "blacksmith", "tavern"]
 const PREFABS := {
     "auction": {"name": "Аукцион", "file": "auction_hall_mobile.glb", "width": 13.0},
     "blacksmith": {"name": "Кузница", "file": "blacksmith_mobile.glb", "width": 11.0},
