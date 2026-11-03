@@ -66,7 +66,7 @@ func _ready() -> void:
     add_child(graphics)
     for code in MATERIAL_COLORS:
         var mat := StandardMaterial3D.new()
-        mat.albedo_color = Color(code)
+        mat.albedo_color = Color("e8e8e4") # Neutral untextured construction shells; decoration comes later.
         mat.roughness = 0.82
         materials.append(mat)
     ghost_green = StandardMaterial3D.new()
@@ -433,9 +433,10 @@ func _make_ui() -> void:
     choices.custom_minimum_size.x = 204.0
     scroll.add_child(choices)
     var title := Label.new()
-    title.text = "🏰 ОСОБНЯК · ДЕТАЛИ"
+    title.text = "🏰 БЕЛЫЕ МОДУЛИ"
     title.add_theme_font_size_override("font_size", 17)
     choices.add_child(title)
+    _button(choices, "🏠 Построить белый дом", build_white_house)
     for category in ["Основание", "Стены", "Крыша", "Детали"]:
         var label := Label.new()
         label.text = "── " + category + " ──"
@@ -744,3 +745,60 @@ func _unhandled_input(event: InputEvent) -> void:
     elif event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
         _drag(event.position, event.relative)
         get_viewport().set_input_as_handled()
+
+
+# Construct a simple 9x9m one-storey white shell from original modular pieces.
+# No old building GLBs, decoration or network access are involved.
+# Existing player constructions are never cleared or overwritten.
+func build_white_house() -> void:
+    if items.size() + 34 > MAX_PIECES:
+        _status("Недостаточно места для дома: предел деталей.")
+        return
+    cancel()
+    var origin := Vector2i(999, 999)
+    # Search near the city outskirts, without changing roads or the fountain.
+    for gz in range(-25, 26, 5):
+        if origin.x != 999:
+            break
+        for gx in range(-30, 31, 5):
+            var planned: Array[Dictionary] = []
+            for z in range(3):
+                for x in range(3):
+                    planned.append(_entry("foundation", gx + x, gz + z, 0))
+                    planned.append(_entry("roof_flat", gx + x, gz + z, 0))
+            for x in range(3):
+                planned.append(_entry("window_wall", gx + x, gz, 0, 0))
+                planned.append(_entry("window_wall", gx + x, gz + 2, 0, 2))
+            for z in range(3):
+                planned.append(_entry("stone_wall", gx, gz + z, 0, 3))
+                planned.append(_entry("stone_wall", gx + 2, gz + z, 0, 1))
+            # Door replaces the middle wall on the front.
+            planned[20] = _entry("door_wall", gx + 1, gz, 0, 0)
+            var valid := true
+            for d in planned:
+                if not _position_ok(d):
+                    valid = false
+                    break
+            if valid:
+                origin = Vector2i(gx, gz)
+                break
+    if origin.x == 999:
+        _status("Нет свободного участка 9×9 м. Освободи площадку рядом с городом.")
+        return
+    var pieces: Array[Dictionary] = []
+    for z in range(3):
+        for x in range(3):
+            pieces.append(_entry("foundation", origin.x + x, origin.y + z, 0))
+            pieces.append(_entry("roof_flat", origin.x + x, origin.y + z, 0))
+    for x in range(3):
+        pieces.append(_entry("door_wall" if x == 1 else "window_wall", origin.x + x, origin.y, 0, 0))
+        pieces.append(_entry("window_wall", origin.x + x, origin.y + 2, 0, 2))
+    for z in range(3):
+        pieces.append(_entry("stone_wall", origin.x, origin.y + z, 0, 3))
+        pieces.append(_entry("stone_wall", origin.x + 2, origin.y + z, 0, 1))
+    _push_undo()
+    items.append_array(pieces)
+    floor_level = 0
+    _rebuild()
+    var saved_ok := _save()
+    _status("Белый дом 9×9 м построен: %d модулей. %s" % [pieces.size(), "Сохранено." if saved_ok else "Ошибка сохранения!"])
