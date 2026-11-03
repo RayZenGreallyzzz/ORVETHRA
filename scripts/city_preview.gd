@@ -901,7 +901,7 @@ func _spawn_blacksmith() -> void:
             var clear := true
             for road in roads:
                 for j in range(road.size() - 1):
-                    if _point_segment_distance(candidate, road[j], road[j + 1]) < 11.0:
+                    if _blacksmith_segment_distance(candidate, road[j], road[j + 1]) < 11.0:
                         clear = false
                         break
                 if not clear:
@@ -929,3 +929,11 @@ func _spawn_blacksmith() -> void:
 func move_blacksmith_to(world_x: float, world_z: float, yaw_degrees: float = 0.0) -> void:
     if blacksmith != null:
         blacksmith.call("move_building", Vector3(world_x, 0.0, world_z), yaw_degrees)
+
+func _blacksmith_segment_distance(point: Vector2, a: Vector2, b: Vector2) -> float:
+    var ab := b - a
+    var squared := ab.length_squared()
+    if squared < 0.000001:
+        return point.distance_to(a)
+    var t := clampf((point - a).dot(ab) / squared, 0.0, 1.0)
+    return point.distance_to(a + ab * t)
