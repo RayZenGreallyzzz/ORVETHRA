@@ -240,17 +240,31 @@ func _make_instance(entry: Dictionary, ghost: bool) -> Node3D:
     add_child(obj)
     var model := _preview_model(str(entry["type"]))
     obj.add_child(model)
-    # One simple collision hull rather than expensive per-triangle collision.
+    # Four perimeter collision strips with a real walkable entrance gap.
+    # A solid hull would make the visible door unusable.
     var body := StaticBody3D.new()
-    body.name = "SimpleBuildingCollision"
+    body.name = "BuildingPerimeterCollision"
     obj.add_child(body)
-    var shape := CollisionShape3D.new()
-    var hull := BoxShape3D.new()
     var w := float(PREFABS[str(entry["type"])]["width"])
-    hull.size = Vector3(w * 0.9, w * 0.55, w * 0.68)
-    shape.shape = hull
-    shape.position.y = hull.size.y * 0.5
-    body.add_child(shape)
+    var d := w * 0.76
+    var h := 6.3 if ["auction", "tavern", "manor"].has(str(entry["type"])) else 3.15
+    var doorway := 1.9
+    var side_width := (w - doorway) * 0.5
+    var strips := [
+        [Vector3(-w * 0.5 + side_width * 0.5, h * 0.5, -d * 0.5), Vector3(side_width, h, 0.35)],
+        [Vector3(w * 0.5 - side_width * 0.5, h * 0.5, -d * 0.5), Vector3(side_width, h, 0.35)],
+        [Vector3(0, h * 0.5, d * 0.5), Vector3(w, h, 0.35)],
+        [Vector3(-w * 0.5, h * 0.5, 0), Vector3(0.35, h, d)],
+        [Vector3(w * 0.5, h * 0.5, 0), Vector3(0.35, h, d)],
+        [Vector3(0, h - 0.3, -d * 0.5), Vector3(doorway, 0.6, 0.35)]
+    ]
+    for strip in strips:
+        var shape := CollisionShape3D.new()
+        var hull := BoxShape3D.new()
+        hull.size = strip[1]
+        shape.shape = hull
+        shape.position = strip[0]
+        body.add_child(shape)
     _apply_entry(obj, entry)
     body.collision_layer = 0 if ghost else 1
     body.collision_mask = 0 if ghost else 1
