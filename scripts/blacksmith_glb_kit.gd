@@ -77,7 +77,8 @@ func _paint(node: Node, mat: Material) -> void:
 func _piece(kind: String, position: Vector3, yaw: float, target_span: float, target_height: float) -> bool:
     var packed := _load_scene(kind)
     if packed == null:
-        return false
+        _fallback_piece(kind, position, yaw, target_span, target_height)
+        return true
     var instance := packed.instantiate() as Node3D
     if instance == null:
         return false
@@ -220,3 +221,39 @@ func move_building(world_location: Vector3, yaw_degrees: float = 0.0) -> void:
 func nudge_building(dx: float, dz: float, rotation_degrees: float = 0.0) -> void:
     global_position += Vector3(dx, 0.0, dz)
     global_rotation.y += deg_to_rad(rotation_degrees)
+
+## Lightweight temporary geometry is shown until the detailed GLBs arrive.
+## All pieces are under the same movable building root.
+func _fallback_box(parent: Node3D, center: Vector3, size: Vector3, mat: Material) -> void:
+    var view := MeshInstance3D.new()
+    var mesh := BoxMesh.new()
+    mesh.size = size
+    view.mesh = mesh
+    view.material_override = mat
+    view.position = center
+    view.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    parent.add_child(view)
+
+func _fallback_piece(kind: String, position: Vector3, yaw: float, span: float, height: float) -> void:
+    var section := Node3D.new()
+    section.name = "BlacksmithFallback_" + kind
+    section.position = position
+    section.rotation.y = yaw
+    _assembled.add_child(section)
+    var stone := _mat("solid")
+    var timber := _mat("entrance")
+    if kind == "roof":
+        _fallback_box(section, Vector3(0, height * 0.32, 0), Vector3(span, 0.3, span), _mat("roof"))
+        _fallback_box(section, Vector3(0, height * 0.62, 0), Vector3(span * 0.85, 0.3, span * 0.85), _mat("roof"))
+    elif kind == "entrance":
+        for side in [-1.0, 1.0]:
+            _fallback_box(section, Vector3(side * span * 0.39, height * 0.5, 0), Vector3(span * 0.22, height, 0.28), stone)
+        _fallback_box(section, Vector3(0, height * 0.92, 0), Vector3(span * 0.60, height * 0.16, 0.28), timber)
+    elif kind == "window":
+        _fallback_box(section, Vector3(0, height * 0.17, 0), Vector3(span, height * 0.34, 0.28), stone)
+        _fallback_box(section, Vector3(0, height * 0.88, 0), Vector3(span, height * 0.24, 0.28), stone)
+        for side in [-1.0, 1.0]:
+            _fallback_box(section, Vector3(side * span * 0.42, height * 0.55, 0), Vector3(span * 0.16, height * 0.50, 0.28), timber)
+    else:
+        _fallback_box(section, Vector3(0, height * 0.5, 0), Vector3(span, height, 0.28), stone)
+        _fallback_box(section, Vector3(0, height * 0.85, 0.18), Vector3(span, 0.14, 0.12), timber)
