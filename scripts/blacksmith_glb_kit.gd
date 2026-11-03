@@ -18,6 +18,7 @@ const MODELS := {
 }
 var _scenes: Dictionary = {}
 var _assembled: Node3D
+var _materials: Dictionary = {}
 
 func _ready() -> void:
     if build_on_ready:
@@ -27,28 +28,21 @@ func _load_scene(kind: String) -> PackedScene:
     if _scenes.has(kind):
         return _scenes[kind]
     var path: String = module_directory.path_join(MODELS[kind])
-    if not FileAccess.file_exists(path):
+    if not ResourceLoader.exists(path):
         push_warning("Blacksmith GLB missing: " + path)
         return null
-    var doc := GLTFDocument.new()
-    var state := GLTFState.new()
-    var error := doc.append_from_file(path, state)
-    if error != OK:
-        push_warning("GLB import error %d: %s" % [error, path])
+    # Godot imports .glb to PackedScene in the editor/build. Reuse that
+    # imported scene instead of reparsing the GLB for every placement.
+    var scene := ResourceLoader.load(path, "PackedScene") as PackedScene
+    if scene == null:
+        push_warning("Cannot load imported GLB scene: " + path)
         return null
-    var root := doc.generate_scene(state)
-    if root == null:
-        return null
-    var scene := PackedScene.new()
-    # PackedScene.pack requires owned descendants; import root owns its children.
-    if scene.pack(root) != OK:
-        root.free()
-        return null
-    root.free()
     _scenes[kind] = scene
     return scene
 
 func _mat(kind: String) -> StandardMaterial3D:
+    if _materials.has(kind):
+        return _materials[kind]
     var mat := StandardMaterial3D.new()
     match kind:
         "roof":
@@ -61,6 +55,7 @@ func _mat(kind: String) -> StandardMaterial3D:
         _:
             mat.albedo_color = Color("8b8984")
     mat.roughness = 0.83
+    _materials[kind] = mat
     return mat
 
 func _paint(node: Node, mat: Material) -> void:
@@ -89,7 +84,8 @@ func _piece(kind: String, position: Vector3, yaw: float, target_span: float, tar
     var sy: float = target_height / extent.y
     instance.scale = Vector3(sx, sy, sx)
     instance.rotation.y = yaw
-    instance.position = position + Vector3(0.0, target_height * 0.5, 0.0)
+    # Align mesh bottom with floor and centre its original bounding box.
+    instance.position = position + Vector3(-bounds.position.x * sx - extent.x * sx * 0.5, -bounds.position.y * sy, -bounds.position.z * sx - extent.z * sx * 0.5)
     if recolor:
         _paint(instance, _mat(kind))
     return true
