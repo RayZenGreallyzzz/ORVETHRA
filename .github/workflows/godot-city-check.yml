@@ -1,0 +1,20 @@
+name: Godot city validation
+on:
+  push:
+    branches: [feature/android-training-client-v1]
+  workflow_dispatch:
+jobs:
+  parse-and-import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Godot 4.3
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.3.0
+          use-dotnet: false
+          include-templates: false
+      - name: Import project assets and scripts
+        run: godot --headless --path . --editor --import --quit
+      - name: Parse playable city scene
+        run: godot --headless --path . --quit-after 120 res://scenes/city_preview.tscn
