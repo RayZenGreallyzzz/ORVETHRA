@@ -891,30 +891,36 @@ func _try_attack() -> void:
 ## Missing assets do not create invisible collision walls or break the town.
 func _spawn_blacksmith() -> void:
     var chosen := Vector2(9999, 9999)
-    for z in range(-75, 76, 12):
-        if chosen.x != 9999:
-            break
-        for x in range(-85, 86, 12):
+    var best_score := -INF
+    # Full 9m building footprint, plus room to walk around it.
+    for z in range(-75, 76, 6):
+        for x in range(-85, 86, 6):
             var candidate := Vector2(float(x), float(z))
-            if candidate.length() < 27.0:
+            if candidate.length() < 28.0:
                 continue
-            var clear := true
+            if candidate.distance_to(Vector2(90.0, 94.0)) < 20.0:
+                continue
+            var nearest_road := 1000.0
             for road in roads:
                 for j in range(road.size() - 1):
-                    if _blacksmith_segment_distance(candidate, road[j], road[j + 1]) < 11.0:
-                        clear = false
-                        break
-                if not clear:
-                    break
-            if clear and world_builder != null:
+                    nearest_road = minf(nearest_road, _blacksmith_segment_distance(candidate, road[j], road[j + 1]))
+            if nearest_road < 10.0:
+                continue
+            var clear := true
+            if world_builder != null:
                 for placed in world_builder.saved:
                     var occupied := Vector2(float(placed["x"]), float(placed["z"]))
-                    if candidate.distance_to(occupied) < 13.0:
+                    var prefab := str(placed["type"])
+                    var width := float(world_builder.PREFABS[prefab]["width"]) * float(placed["size"])
+                    if candidate.distance_to(occupied) < 7.0 + width * 0.55:
                         clear = false
                         break
-            if clear:
+            if not clear:
+                continue
+            var score := -absf(nearest_road - 13.0) - candidate.length() * 0.012
+            if score > best_score:
+                best_score = score
                 chosen = candidate
-                break
     if chosen.x == 9999:
         push_warning("Blacksmith: no free grass plot found")
         return
