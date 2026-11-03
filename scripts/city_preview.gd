@@ -911,7 +911,7 @@ func _spawn_blacksmith() -> void:
                 for placed in world_builder.saved:
                     var occupied := Vector2(float(placed["x"]), float(placed["z"]))
                     var prefab := str(placed["type"])
-                    var width := float(world_builder.PREFABS[prefab]["width"]) * float(placed["size"])
+                    var width := float(CityWorldBuilder.PREFABS[prefab]["width"]) * float(placed["size"])
                     if candidate.distance_to(occupied) < 7.0 + width * 0.55:
                         clear = false
                         break
