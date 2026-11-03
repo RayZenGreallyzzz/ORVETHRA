@@ -1,0 +1,34 @@
+name: MMORPG Core smoke test
+
+on:
+  push:
+    branches:
+      - feature/mmorpg-core-foundation
+  pull_request:
+    paths:
+      - 'scripts/mmorpg/**'
+      - 'tests/mmorpg_core_smoke.gd'
+      - '.github/workflows/mmorpg-core.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run MMORPG core headless test
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --version
+          timeout 90 godot --headless --path . --script res://tests/mmorpg_core_smoke.gd 2>&1 | tee /tmp/mmorpg-core.log
+          grep -q 'MMORPG_CORE_SMOKE_OK' /tmp/mmorpg-core.log
+          if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call|Invalid get index|Assertion failed' /tmp/mmorpg-core.log; then
+            exit 1
+          fi
