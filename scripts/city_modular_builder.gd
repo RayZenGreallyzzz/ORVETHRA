@@ -66,7 +66,9 @@ func _ready() -> void:
     add_child(graphics)
     for code in MATERIAL_COLORS:
         var mat := StandardMaterial3D.new()
-        mat.albedo_color = Color("e8e8e4") # Neutral untextured construction shells; decoration comes later.
+        mat.albedo_color = Color.WHITE
+        mat.albedo_texture = _make_procedural_texture(materials.size())
+        mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
         mat.roughness = 0.82
         materials.append(mat)
     ghost_green = StandardMaterial3D.new()
@@ -79,6 +81,56 @@ func _ready() -> void:
     _make_ui()
     _rebuild()
     _set_ui(false)
+
+
+# Lightweight, original offline textures (64x64 RGBA each).
+# Generated on device: no downloads, external assets, or blurry compressed GLBs.
+# Material slots: light stone, dark stone, timber, plaster, slate, glass, brass.
+func _make_procedural_texture(material_id: int) -> ImageTexture:
+    var palette := [
+        Color("bcb4a4"), Color("77716b"), Color("77503a"),
+        Color("e6d7b7"), Color("4c5968"), Color("86b4bd"),
+        Color("bba36b")
+    ]
+    var img := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+    var base: Color = palette[clampi(material_id, 0, palette.size() - 1)]
+    for y in range(64):
+        for x in range(64):
+            var seed := posmod(x * 37 + y * 71 + x * y * 13, 101)
+            var grain := (float(seed) / 100.0 - 0.5) * 0.16
+            var tint := 1.0 + grain
+            if material_id == 0 or material_id == 1:
+                # Offset masonry courses and recessed mortar joints.
+                var row := int(y / 16)
+                var seam_x := posmod(x + (8 if row % 2 == 1 else 0), 32)
+                if y % 16 < 2 or seam_x < 2:
+                    tint *= 0.69
+            elif material_id == 2:
+                # Vertical wooden grain and occasional dark knots.
+                if x % 16 < 2:
+                    tint *= 0.65
+                if posmod(x * 7 + y * 3, 23) < 2:
+                    tint *= 0.88
+            elif material_id == 3:
+                # Light warm plaster.
+                tint = 1.0 + grain * 0.38
+            elif material_id == 4:
+                # Overlapping dark slate roof shingles.
+                var row := int(y / 12)
+                if y % 12 < 2 or posmod(x + (8 if row % 2 else 0), 16) < 2:
+                    tint *= 0.72
+            elif material_id == 5:
+                # Soft tinted glass.
+                tint = 0.96 + grain * 0.25
+            else:
+                # Subtle warm metallic detailing.
+                tint = 0.98 + grain * 0.5
+            img.set_pixel(x, y, Color(
+                clampf(base.r * tint, 0.0, 1.0),
+                clampf(base.g * tint, 0.0, 1.0),
+                clampf(base.b * tint, 0.0, 1.0), 1.0))
+    img.generate_mipmaps()
+    return ImageTexture.create_from_image(img)
 
 # Geometry is assembled in memory as six-sided boxes, grouped by material.
 # This produces 1 MeshInstance per ghost and one MultiMesh draw per part type.
