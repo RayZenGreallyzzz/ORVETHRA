@@ -28,3 +28,19 @@ jobs:
           timeout 90 godot --headless --path . --script res://tests/server_training_smoke.gd 2>&1 | tee /tmp/server-training.log
           grep -q 'SERVER_TRAINING_SMOKE_OK' /tmp/server-training.log
           if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call|Assertion failed' /tmp/server-training.log; then exit 1; fi
+      - name: Start headless WebSocket server on loopback
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 8 godot --headless --path . --script res://server/training_server.gd > /tmp/server-start.log 2>&1 &
+          pid=$!
+          for i in $(seq 1 30); do
+            if grep -q 'ORVETHRA_TRAINING_SERVER_READY' /tmp/server-start.log; then break; fi
+            if ! kill -0 "$pid" 2>/dev/null; then break; fi
+            sleep 0.2
+          done
+          cat /tmp/server-start.log
+          grep -q 'ORVETHRA_TRAINING_SERVER_READY' /tmp/server-start.log
+          if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call' /tmp/server-start.log; then exit 1; fi
+          kill "$pid" 2>/dev/null || true
+          wait "$pid" 2>/dev/null || true
