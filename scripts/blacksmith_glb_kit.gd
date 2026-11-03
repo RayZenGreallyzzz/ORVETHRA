@@ -174,12 +174,17 @@ func snap_to_grass() -> bool:
         return false
     var space := world.direct_space_state
     var footprint := Vector2(float(maxi(2, width_bays)) * wall_span_m, float(maxi(2, depth_bays)) * wall_span_m)
+    var exclusions: Array[RID] = []
+    if _assembled != null:
+        for body in _assembled.find_children("*", "CollisionObject3D", true, false):
+            exclusions.append((body as CollisionObject3D).get_rid())
     for ring in range(1, 9):
         for step in range(16):
             var angle := TAU * float(step) / 16.0
             var radius := grass_search_radius_m * float(ring) / 8.0
             var point := global_position + Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
             var query := PhysicsRayQueryParameters3D.create(point + Vector3.UP * 80.0, point - Vector3.UP * 80.0)
+            query.exclude = exclusions
             var hit := space.intersect_ray(query)
             if hit.is_empty():
                 continue
@@ -195,7 +200,9 @@ func snap_to_grass() -> bool:
             box.size = Vector3(footprint.x + 3.0, 3.0, footprint.y + 3.0)
             check.shape = box
             check.transform = Transform3D(Basis.IDENTITY, surface + Vector3.UP * 1.6)
-            check.exclude = [collider.get_rid()] if collider is CollisionObject3D else []
+            check.exclude = exclusions.duplicate()
+            if collider is CollisionObject3D:
+                check.exclude.append((collider as CollisionObject3D).get_rid())
             if not space.intersect_shape(check, 8).is_empty():
                 continue
             global_position = surface
