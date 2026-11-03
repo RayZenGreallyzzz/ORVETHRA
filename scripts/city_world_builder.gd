@@ -49,6 +49,7 @@ func _ready() -> void:
     tint_ok = _tint(Color(0.10, 0.89, 0.56, 0.27))
     tint_no = _tint(Color(1.0, 0.20, 0.15, 0.38))
     _load_layout()
+    _seed_initial_town_if_empty()
     _rebuild()
     _create_ui()
     modular_editor = ModularEditor.new()
@@ -608,3 +609,25 @@ func export_city_blueprint() -> void:
     file.store_string(JSON.stringify(payload, "  "))
     file.close()
     _say("План города экспортирован: " + path + " (" + str(saved.size()) + " зданий)")
+
+## First-launch starter town. Never overwrite an existing player layout.
+## The dedicated modular blacksmith is spawned separately by city_preview.gd.
+func _seed_initial_town_if_empty() -> void:
+    if FileAccess.file_exists(SAVE_PATH) or not saved.is_empty():
+        return
+    var planned := ["tavern", "auction", "manor"]
+    for key in planned:
+        var found := false
+        for gz in range(-72, 73, 8):
+            if found:
+                break
+            for gx in range(-88, 89, 8):
+                var entry := _new_entry(key, Vector2(float(gx), float(gz)))
+                if not _position_ok(entry):
+                    continue
+                # Keep the central town walkable and spread buildings apart.
+                saved.append(entry)
+                found = true
+                break
+    if not saved.is_empty():
+        _save_layout()
