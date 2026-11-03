@@ -890,10 +890,6 @@ func _try_attack() -> void:
 ## Spawn the real GLB blacksmith on a vacant grassy plot.
 ## Missing assets do not create invisible collision walls or break the town.
 func _spawn_blacksmith() -> void:
-    for filename in ["стена кузни глухая.glb", "стена кузни с окнами.glb", "вход кузня.glb", "крыша кузни.glb"]:
-        if not ResourceLoader.exists("res://assets/blacksmith/" + filename):
-            push_warning("Blacksmith not spawned: missing " + filename)
-            return
     var chosen := Vector2(9999, 9999)
     for z in range(-75, 76, 12):
         if chosen.x != 9999:
