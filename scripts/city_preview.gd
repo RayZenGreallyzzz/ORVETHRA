@@ -57,6 +57,8 @@ var hero_anim: AnimationPlayer
 var hero_animation := ""
 var greg_npc
 var world_builder
+var blacksmith: Node3D
+const BLACKSMITH_SCENE := preload("res://scenes/movable_blacksmith.tscn")
 
 # Two narrow raised stone curbs per street, a single combined low-poly mesh.
 # Decorative only: no extra physics bodies or independent curb-stone nodes.
@@ -155,6 +157,7 @@ func _ready() -> void:
         player.position = Vector3(85.3, 0.12, 87.7)
     _interface()
     _world_builder()
+    _spawn_blacksmith()
     _update_camera()
 
 func _make_shader(code: String) -> ShaderMaterial:
@@ -883,3 +886,50 @@ func _try_attack() -> void:
         return
     city_hud.show_combat_message(training.hit_target(player.global_position))
     # A dedicated sword attack clip will be integrated when available.
+
+## Spawn the real GLB blacksmith on a vacant grassy plot.
+## Missing assets do not create invisible collision walls or break the town.
+func _spawn_blacksmith() -> void:
+    for filename in ["стена кузни глухая.glb", "стена кузни с окнами.glb", "вход кузня.glb", "крыша кузни.glb"]:
+        if not ResourceLoader.exists("res://assets/blacksmith/" + filename):
+            push_warning("Blacksmith not spawned: missing " + filename)
+            return
+    var chosen := Vector2(9999, 9999)
+    for z in range(-75, 76, 12):
+        if chosen.x != 9999:
+            break
+        for x in range(-85, 86, 12):
+            var candidate := Vector2(float(x), float(z))
+            if candidate.length() < 27.0:
+                continue
+            var clear := true
+            for road in roads:
+                for j in range(road.size() - 1):
+                    if _point_segment_distance(candidate, road[j], road[j + 1]) < 11.0:
+                        clear = false
+                        break
+                if not clear:
+                    break
+            if clear and world_builder != null:
+                for placed in world_builder.saved:
+                    var occupied := Vector2(float(placed["x"]), float(placed["z"]))
+                    if candidate.distance_to(occupied) < 13.0:
+                        clear = false
+                        break
+            if clear:
+                chosen = candidate
+                break
+    if chosen.x == 9999:
+        push_warning("Blacksmith: no free grass plot found")
+        return
+    blacksmith = BLACKSMITH_SCENE.instantiate()
+    blacksmith.name = "BlacksmithOnGrass"
+    blacksmith.set("place_on_grass", false)
+    blacksmith.set("manual_placement", true)
+    blacksmith.set("placement_x_m", chosen.x)
+    blacksmith.set("placement_z_m", chosen.y)
+    add_child(blacksmith)
+
+func move_blacksmith_to(world_x: float, world_z: float, yaw_degrees: float = 0.0) -> void:
+    if blacksmith != null:
+        blacksmith.call("move_building", Vector3(world_x, 0.0, world_z), yaw_degrees)
