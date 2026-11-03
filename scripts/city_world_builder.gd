@@ -120,36 +120,110 @@ func _preview_model(key: String) -> Node3D:
                 model.scale = Vector3.ONE * factor
                 model.position = Vector3(-(lo.x + hi.x) * 0.5, -lo.y, -(lo.z + hi.z) * 0.5) * factor
             return model
-    # Explicitly marked proxy when optional GLBs have not been uploaded yet.
-    var fallback := Node3D.new()
-    fallback.name = "TEMPORARY_PROXY_" + key
-    var w := float(PREFABS[key]["width"])
-    var base := MeshInstance3D.new()
-    var mesh := BoxMesh.new()
-    mesh.size = Vector3(w, w * 0.55, w * 0.75)
-    base.mesh = mesh
-    base.position.y = mesh.size.y * 0.5
-    var stone := StandardMaterial3D.new()
-    stone.albedo_color = Color("7b796d")
-    base.material_override = stone
-    fallback.add_child(base)
-    var roof := MeshInstance3D.new()
-    var slab := BoxMesh.new()
-    slab.size = Vector3(w * 1.09, w * 0.13, w * 0.83)
-    roof.mesh = slab
-    roof.position.y = w * 0.62
-    var roof_mat := StandardMaterial3D.new()
-    roof_mat.albedo_color = Color("75554b")
-    roof.material_override = roof_mat
-    fallback.add_child(roof)
-    var label := Label3D.new()
-    label.text = "МАКЕТ · " + _type_name(key)
-    label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-    label.position.y = w * 0.82
-    label.font_size = 21
-    label.pixel_size = 0.013
-    fallback.add_child(label)
-    return fallback
+    return _procedural_building(key)
+
+## Fully assembled lightweight town buildings, used when optional GLBs are absent.
+## Door and window openings are real gaps in the geometry, not painted decals.
+func _town_box(root: Node3D, name_tag: String, center: Vector3, size: Vector3, material: Material) -> void:
+    var part := MeshInstance3D.new()
+    part.name = name_tag
+    var box := BoxMesh.new()
+    box.size = size
+    part.mesh = box
+    part.material_override = material
+    part.position = center
+    root.add_child(part)
+
+func _town_material(color: Color) -> StandardMaterial3D:
+    var mat := StandardMaterial3D.new()
+    mat.albedo_color = color
+    mat.roughness = 0.92
+    return mat
+
+func _town_wall(root: Node3D, name_tag: String, x: float, z: float, length: float, height: float, along_x: bool, opening: String, stone: Material, wood: Material, glass: Material) -> void:
+    var thickness := 0.30
+    var axis := Vector3(1, 0, 0) if along_x else Vector3(0, 0, 1)
+    var center := Vector3(x, 0, z)
+    var full := Vector3(length, height, thickness) if along_x else Vector3(thickness, height, length)
+    if opening == "solid":
+        _town_box(root, name_tag, center + Vector3.UP * height * 0.5, full, stone)
+        return
+    var opening_width := 1.65 if opening == "door" else 1.55
+    var opening_bottom := 0.0 if opening == "door" else 1.15
+    var opening_top := 2.55 if opening == "door" else 2.55
+    var side_width := (length - opening_width) * 0.5
+    var side_size := Vector3(side_width, height, thickness) if along_x else Vector3(thickness, height, side_width)
+    for side in [-1.0, 1.0]:
+        _town_box(root, name_tag + "_pier", center + axis * (opening_width + side_width) * 0.5 + Vector3.UP * height * 0.5, side_size, stone)
+    if opening_bottom > 0.0:
+        var bottom_size := Vector3(opening_width, opening_bottom, thickness) if along_x else Vector3(thickness, opening_bottom, opening_width)
+        _town_box(root, name_tag + "_sill", center + Vector3.UP * opening_bottom * 0.5, bottom_size, stone)
+        var glass_size := Vector3(opening_width - 0.12, opening_top - opening_bottom - 0.12, 0.06) if along_x else Vector3(0.06, opening_top - opening_bottom - 0.12, opening_width - 0.12)
+        _town_box(root, name_tag + "_glass", center + Vector3.UP * (opening_bottom + opening_top) * 0.5, glass_size, glass)
+        var frame_size := Vector3(0.12, opening_top - opening_bottom, 0.13) if along_x else Vector3(0.13, opening_top - opening_bottom, 0.12)
+        _town_box(root, name_tag + "_mullion", center + Vector3.UP * (opening_bottom + opening_top) * 0.5, frame_size, wood)
+    var top_height := height - opening_top
+    if top_height > 0.0:
+        var top_size := Vector3(opening_width, top_height, thickness) if along_x else Vector3(thickness, top_height, opening_width)
+        _town_box(root, name_tag + "_lintel", center + Vector3.UP * (opening_top + top_height * 0.5), top_size, stone)
+
+func _procedural_building(key: String) -> Node3D:
+    var root := Node3D.new()
+    root.name = "AssembledTown_" + key
+    var width := float(PREFABS[key]["width"])
+    var depth := width * 0.76
+    var floors := 2 if key == "auction" or key == "manor" or key == "tavern" else 1
+    var storey := 3.15
+    var wall_height := float(floors) * storey
+    var stone := _town_material(Color("a99b85") if key == "manor" else Color("857c70"))
+    var timber := _town_material(Color("49372c"))
+    var roof_mat := _town_material(Color("63483f") if key == "tavern" else Color("414957"))
+    var glass := _town_material(Color("476d7c"))
+    _town_box(root, "StoneFoundation", Vector3(0, 0.12, 0), Vector3(width + 0.3, 0.24, depth + 0.3), stone)
+    var bays := 3 if key == "village" else 4
+    var bay_width := width / float(bays)
+    for floor_index in range(floors):
+        var level := float(floor_index) * storey
+        for bay in range(bays):
+            var px := -width * 0.5 + (float(bay) + 0.5) * bay_width
+            var front_open := "door" if floor_index == 0 and bay == int(bays / 2) else ("window" if bay % 2 == 0 else "solid")
+            var front := Node3D.new()
+            front.position.y = level
+            root.add_child(front)
+            _town_wall(front, "Front_" + str(bay), px, -depth * 0.5, bay_width, storey, true, front_open, stone, timber, glass)
+            _town_wall(front, "Back_" + str(bay), px, depth * 0.5, bay_width, storey, true, "window" if bay % 2 == 0 else "solid", stone, timber, glass)
+        for side in [-1.0, 1.0]:
+            for bay in range(3):
+                var pz := -depth * 0.5 + (float(bay) + 0.5) * depth / 3.0
+                var side_root := Node3D.new()
+                side_root.position.y = level
+                root.add_child(side_root)
+                _town_wall(side_root, "Side_" + str(side) + "_" + str(bay), side * width * 0.5, pz, depth / 3.0, storey, false, "window" if bay == 1 else "solid", stone, timber, glass)
+        if floor_index < floors - 1:
+            _town_box(root, "UpperFloor", Vector3(0, level + storey, 0), Vector3(width, 0.18, depth), timber)
+    # Pitched roof made from two sloping planes, ridge and gable end panels.
+    var roof := Node3D.new()
+    roof.position.y = wall_height + 0.15
+    root.add_child(roof)
+    var rise := 1.8 if key == "manor" else 1.45
+    var slope_length := sqrt(pow(depth * 0.5 + 0.45, 2) + rise * rise)
+    var slope_angle := atan2(rise, depth * 0.5 + 0.45)
+    for side in [-1.0, 1.0]:
+        var panel := MeshInstance3D.new()
+        panel.name = "PitchedRoof"
+        var slab := BoxMesh.new()
+        slab.size = Vector3(width + 0.9, 0.22, slope_length)
+        panel.mesh = slab
+        panel.material_override = roof_mat
+        panel.position = Vector3(0, rise * 0.5, side * (depth * 0.25 + 0.20))
+        panel.rotation.x = side * slope_angle
+        roof.add_child(panel)
+    _town_box(roof, "RoofRidge", Vector3(0, rise, 0), Vector3(width + 1.0, 0.24, 0.28), roof_mat)
+    if key == "tavern" or key == "manor":
+        _town_box(root, "Chimney", Vector3(width * 0.29, wall_height + 1.0, depth * 0.16), Vector3(0.8, 2.4, 0.8), stone)
+    if key == "auction":
+        _town_box(root, "AuctionEntranceCanopy", Vector3(0, 2.75, -depth * 0.5 - 0.85), Vector3(3.5, 0.22, 1.9), roof_mat)
+    return root
 
 func _highlight(node: Node, material: Material) -> void:
     if node is MeshInstance3D:
