@@ -312,6 +312,7 @@ func _create_ui() -> void:
     _add_button(controls, "Удалить", delete_selected)
     _add_button(controls, "↶ Отменить", undo)
     _add_button(controls, "Сохранить", manual_save)
+    _add_button(controls, "Экспорт города", export_city_blueprint)
     _add_button(controls, "Снять выбор", cancel)
     _add_button(controls, "Выйти", func() -> void: set_active(false))
     get_viewport().size_changed.connect(_layout_ui)
@@ -592,3 +593,16 @@ func _unhandled_input(event: InputEvent) -> void:
         else:
             _pan(event.relative)
         get_viewport().set_input_as_handled()
+
+# Portable offline city blueprint. Does not change the active save or gameplay.
+# File is accessible through the Android app user-data directory.
+func export_city_blueprint() -> void:
+    var payload := {"format": "ORVETHRA_CITY_BLUEPRINT", "version": 1, "map": "starter_city", "buildings": saved.duplicate(true)}
+    var path := "user://orvethra_starter_city_export.json"
+    var file := FileAccess.open(path, FileAccess.WRITE)
+    if file == null:
+        _say("Не удалось экспортировать город: " + str(FileAccess.get_open_error()))
+        return
+    file.store_string(JSON.stringify(payload, "  "))
+    file.close()
+    _say("План города экспортирован: " + path + " (" + str(saved.size()) + " зданий)")
