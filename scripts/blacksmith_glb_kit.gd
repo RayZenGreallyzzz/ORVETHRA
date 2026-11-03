@@ -8,6 +8,8 @@ extends Node3D
 @export var width_bays: int = 3
 @export var depth_bays: int = 3
 @export var build_on_ready: bool = true
+@export var place_on_grass: bool = true
+@export var grass_search_radius_m: float = 45.0
 @export var recolor: bool = true
 
 const MODELS := {
@@ -23,6 +25,8 @@ var _materials: Dictionary = {}
 func _ready() -> void:
     if build_on_ready:
         assemble()
+        if place_on_grass:
+            call_deferred("snap_to_grass")
 
 func _load_scene(kind: String) -> PackedScene:
     if _scenes.has(kind):
@@ -154,3 +158,41 @@ func assemble() -> bool:
     if not complete:
         push_warning("Blacksmith assembled partially: supply the four GLBs in " + module_directory)
     return complete
+
+## Place on an open terrain patch. Does not change saved city placements.
+## Terrain collision is required; excludes existing buildings and roads via
+## physics overlap check, and skips any surface without a grass-like collider name.
+func snap_to_grass() -> bool:
+    var world := get_world_3d()
+    if world == null:
+        return false
+    var space := world.direct_space_state
+    var footprint := Vector2(float(maxi(2, width_bays)) * wall_span_m, float(maxi(2, depth_bays)) * wall_span_m)
+    for ring in range(1, 9):
+        for step in range(16):
+            var angle := TAU * float(step) / 16.0
+            var radius := grass_search_radius_m * float(ring) / 8.0
+            var point := global_position + Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
+            var query := PhysicsRayQueryParameters3D.create(point + Vector3.UP * 80.0, point - Vector3.UP * 80.0)
+            var hit := space.intersect_ray(query)
+            if hit.is_empty():
+                continue
+            var collider: Object = hit.get("collider")
+            if not collider is Node:
+                continue
+            var terrain_name := str((collider as Node).name).to_lower()
+            if not ("terrain" in terrain_name or "grass" in terrain_name or "ground" in terrain_name or "зем" in terrain_name or "трава" in terrain_name):
+                continue
+            var surface: Vector3 = hit["position"]
+            var check := PhysicsShapeQueryParameters3D.new()
+            var box := BoxShape3D.new()
+            box.size = Vector3(footprint.x + 3.0, 3.0, footprint.y + 3.0)
+            check.shape = box
+            check.transform = Transform3D(Basis.IDENTITY, surface + Vector3.UP * 1.6)
+            check.exclude = [collider.get_rid()] if collider is CollisionObject3D else []
+            if not space.intersect_shape(check, 8).is_empty():
+                continue
+            global_position = surface
+            return true
+    push_warning("No unobstructed grass found. Blacksmith kept at its original position.")
+    return false
