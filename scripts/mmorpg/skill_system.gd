@@ -1,4 +1,5 @@
 extends RefCounted
+const Stats = preload("res://scripts/mmorpg/core_stats.gd")
 ## Skills are plain data: replace IDs, visuals and animations later.
 static func can_cast(actor: Dictionary, skill: Dictionary, cooldowns: Dictionary, now_ms: int) -> String:
 	if int(actor.get("hp", 0)) <= 0:
@@ -31,4 +32,7 @@ static func tick_modifiers(actor: Dictionary, delta_seconds: float) -> void:
 			var updated: Dictionary = modifier.duplicate(true)
 			updated["remaining"] = remaining
 			next.append(updated)
+	var changed: bool = next.size() != actor.get("modifiers", []).size()
 	actor["modifiers"] = next
+	if changed:
+		Stats.recalculate(actor)
