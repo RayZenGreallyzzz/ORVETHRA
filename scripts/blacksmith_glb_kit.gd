@@ -9,6 +9,10 @@ extends Node3D
 @export var depth_bays: int = 3
 @export var build_on_ready: bool = true
 @export var place_on_grass: bool = true
+@export var manual_placement: bool = false
+@export var placement_x_m: float = 0.0
+@export var placement_z_m: float = 0.0
+@export var placement_yaw_degrees: float = 0.0
 @export var grass_search_radius_m: float = 45.0
 @export var recolor: bool = true
 
@@ -25,7 +29,9 @@ var _materials: Dictionary = {}
 func _ready() -> void:
     if build_on_ready:
         assemble()
-        if place_on_grass:
+        if manual_placement:
+            call_deferred("move_building", Vector3(placement_x_m, global_position.y, placement_z_m), placement_yaw_degrees)
+        elif place_on_grass:
             call_deferred("snap_to_grass")
 
 func _load_scene(kind: String) -> PackedScene:
@@ -196,3 +202,14 @@ func snap_to_grass() -> bool:
             return true
     push_warning("No unobstructed grass found. Blacksmith kept at its original position.")
     return false
+
+## Move the entire assembled blacksmith without rebuilding modules or
+## touching the city's persistent save. Coordinates are world metres.
+func move_building(world_location: Vector3, yaw_degrees: float = 0.0) -> void:
+    global_position = world_location
+    global_rotation.y = deg_to_rad(yaw_degrees)
+
+## Shift the building relative to its current position (metres).
+func nudge_building(dx: float, dz: float, rotation_degrees: float = 0.0) -> void:
+    global_position += Vector3(dx, 0.0, dz)
+    global_rotation.y += deg_to_rad(rotation_degrees)
