@@ -21,6 +21,13 @@ func _initialize() -> void:
 	assert(Skills.cast(hero, skill, cooldowns, 1000).get("ok", false))
 	assert(Skills.can_cast(hero, skill, cooldowns, 1200) == "cooldown")
 	assert(Skills.can_cast(hero, skill, cooldowns, 2500) == "")
+	var baseline_attack := float(hero["stats"]["physical_attack"])
+	hero["modifiers"] = [{"stat": "physical_attack", "flat": 20.0, "remaining": 1.0}]
+	Stats.recalculate(hero)
+	assert(float(hero["stats"]["physical_attack"]) > baseline_attack)
+	Skills.tick_modifiers(hero, 1.1)
+	assert(hero["modifiers"].is_empty())
+	assert(is_equal_approx(float(hero["stats"]["physical_attack"]), baseline_attack))
 	var bag: Dictionary = Inventory.make_inventory(2)
 	assert(Inventory.add_item(bag, "potion", 120, 99) == 0)
 	assert(not Inventory.remove_item(bag, "potion", 121))
