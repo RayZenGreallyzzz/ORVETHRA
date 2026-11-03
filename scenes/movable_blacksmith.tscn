@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/blacksmith_glb_kit.gd" id="1_blacksmith"]
+
+[node name="MovableBlacksmith" type="Node3D"]
+script = ExtResource("1_blacksmith")
+build_on_ready = true
+place_on_grass = true
+manual_placement = false
