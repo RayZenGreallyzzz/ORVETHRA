@@ -1,0 +1,30 @@
+name: Training server combat checks
+
+on:
+  push:
+    branches: [feature/server-training-combat-v1]
+  pull_request:
+    paths:
+      - 'server/**'
+      - 'tests/server_training_smoke.gd'
+      - '.github/workflows/server-training.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate authoritative training combat
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 90 godot --headless --path . --script res://tests/server_training_smoke.gd 2>&1 | tee /tmp/server-training.log
+          grep -q 'SERVER_TRAINING_SMOKE_OK' /tmp/server-training.log
+          if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call|Assertion failed' /tmp/server-training.log; then exit 1; fi
