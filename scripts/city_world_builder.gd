@@ -8,7 +8,9 @@ const PACK_PATH := "res://ORVETHRA_5_Buildings_Android_Optimized.zip"
 const ASSET_DIR := "res://assets/city/buildings/"
 const LIMIT := 70
 const GRID := 0.5
-const ORDER := ["auction", "blacksmith", "tavern", "manor", "village"]
+# Only individual landmark references are offered for new construction.
+# The long combined village strip remains loadable for older saves, but cannot be placed anew.
+const ORDER := ["auction", "blacksmith", "tavern", "manor"]
 const PREFABS := {
     "auction": {"name": "Аукцион", "file": "auction_hall_mobile.glb", "width": 13.0},
     "blacksmith": {"name": "Кузница", "file": "blacksmith_mobile.glb", "width": 11.0},
