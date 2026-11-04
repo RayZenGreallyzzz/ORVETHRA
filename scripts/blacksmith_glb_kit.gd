@@ -74,29 +74,38 @@ func _paint(node: Node, mat: Material) -> void:
     for child in node.get_children():
         _paint(child, mat)
 
-func _piece(kind: String, position: Vector3, yaw: float, target_span: float, target_height: float) -> bool:
+func _piece(kind: String, position: Vector3, yaw: float, target_span: float, target_height: float, target_depth: float = -1.0) -> bool:
     var packed := _load_scene(kind)
     if packed == null:
-        _fallback_piece(kind, position, yaw, target_span, target_height)
+        _fallback_piece(kind, position, yaw, target_span, target_height, target_depth)
         return true
     var instance := packed.instantiate() as Node3D
     if instance == null:
-        return false
-    _assembled.add_child(instance)
-    instance.name = "Blacksmith_" + kind
-    # Source GLBs have Y-up, with their origins near the geometric centre.
-    # Scale uniformly for walls; keep roof's aspect ratio.
+        _fallback_piece(kind, position, yaw, target_span, target_height, target_depth)
+        return true
+    # Rotate the entire pivot, not the scaled mesh's offset. This keeps wall
+    # joints centred even when the source GLB has an off-centre origin.
+    var pivot := Node3D.new()
+    pivot.name = "Blacksmith_" + kind
+    _assembled.add_child(pivot)
+    pivot.position = position
+    pivot.rotation.y = yaw
+    pivot.add_child(instance)
     var bounds := _bounds(instance)
     var extent: Vector3 = bounds.size
-    if extent.x < 0.001 or extent.y < 0.001:
+    if extent.x < 0.001 or extent.y < 0.001 or extent.z < 0.001:
+        pivot.remove_child(instance)
+        pivot.queue_free()
         instance.queue_free()
-        return false
-    var sx: float = target_span / extent.x
-    var sy: float = target_height / extent.y
-    instance.scale = Vector3(sx, sy, sx)
-    instance.rotation.y = yaw
-    # Align mesh bottom with floor and centre its original bounding box.
-    instance.position = position + Vector3(-bounds.position.x * sx - extent.x * sx * 0.5, -bounds.position.y * sy, -bounds.position.z * sx - extent.z * sx * 0.5)
+        _fallback_piece(kind, position, yaw, target_span, target_height, target_depth)
+        return true
+    var sx := target_span / extent.x
+    var sy := target_height / extent.y
+    var sz := target_depth / extent.z if target_depth > 0.0 else sx
+    instance.scale = Vector3(sx, sy, sz)
+    # Mesh origin is centred at X/Z; the bottom touches the floor at Y=0.
+    instance.position = Vector3(-(bounds.position.x + extent.x * 0.5) * sx,
+        -bounds.position.y * sy, -(bounds.position.z + extent.z * 0.5) * sz)
     if recolor:
         _paint(instance, _mat(kind))
     return true
@@ -159,8 +168,15 @@ func assemble() -> bool:
             var px := float(side) * half_x
             complete = _piece("window" if z == int(d / 2) else "solid", Vector3(px, 0, pz), float(side) * PI * 0.5, span, height) and complete
             _collision_box(Vector3(px, height * 0.5, pz), Vector3(0.36, height, span), "SideWall")
-    # Roof is one square module stretched across the entire shell.
-    complete = _piece("roof", Vector3(0, height, 0), 0.0, float(w) * span + 0.7, 2.2) and complete
+    # Two fitted roof halves. Slight seam overlap prevents a visible crack.
+    # Each is a separate child of BlacksmithAssembled, so the whole house
+    # remains movable as one unit.
+    var half_roof_depth := float(d) * span * 0.5 + 0.25
+    var full_roof_width := float(w) * span + 0.60
+    for side in [-1.0, 1.0]:
+        complete = _piece("roof",
+            Vector3(0, height, side * (half_roof_depth * 0.5 - 0.04)),
+            0.0, full_roof_width, 1.65, half_roof_depth + 0.12) and complete
     _collision_box(Vector3(0, -0.12, 0), Vector3(float(w) * span, 0.24, float(d) * span), "Floor")
     if not complete:
         push_warning("Blacksmith assembled partially: supply the four GLBs in " + module_directory)
@@ -234,7 +250,7 @@ func _fallback_box(parent: Node3D, center: Vector3, size: Vector3, mat: Material
     view.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     parent.add_child(view)
 
-func _fallback_piece(kind: String, position: Vector3, yaw: float, span: float, height: float) -> void:
+func _fallback_piece(kind: String, position: Vector3, yaw: float, span: float, height: float, target_depth: float = -1.0) -> void:
     var section := Node3D.new()
     section.name = "BlacksmithFallback_" + kind
     section.position = position
@@ -243,8 +259,19 @@ func _fallback_piece(kind: String, position: Vector3, yaw: float, span: float, h
     var stone := _mat("solid")
     var timber := _mat("entrance")
     if kind == "roof":
-        _fallback_box(section, Vector3(0, height * 0.32, 0), Vector3(span, 0.3, span), _mat("roof"))
-        _fallback_box(section, Vector3(0, height * 0.62, 0), Vector3(span * 0.85, 0.3, span * 0.85), _mat("roof"))
+        # The fallback is a real pitched half-roof, not stacked flat blocks.
+        var run := target_depth if target_depth > 0.0 else span * 0.5
+        var roof_slope := atan2(height, run)
+        var roof_mesh := MeshInstance3D.new()
+        roof_mesh.name = "PitchedRoofHalf"
+        var roof_slab := BoxMesh.new()
+        roof_slab.size = Vector3(span, 0.24, sqrt(run * run + height * height) + 0.15)
+        roof_mesh.mesh = roof_slab
+        roof_mesh.material_override = _mat("roof")
+        roof_mesh.position.y = height * 0.5
+        roof_mesh.rotation.x = (1.0 if position.z > 0.0 else -1.0) * roof_slope
+        roof_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+        section.add_child(roof_mesh)
     elif kind == "entrance":
         for side in [-1.0, 1.0]:
             _fallback_box(section, Vector3(side * span * 0.39, height * 0.5, 0), Vector3(span * 0.22, height, 0.28), stone)
