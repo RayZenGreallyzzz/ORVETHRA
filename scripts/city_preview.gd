@@ -51,6 +51,16 @@ var camera_distance := CAMERA_DEFAULT_DISTANCE
 var moving_speed := 0.0
 const CHARACTER_WALK_SPEED := 3.0
 const CHARACTER_RUN_SPEED := 5.65
+# Android wings: short launch after a run, then momentum-based descending glide.
+const GLIDE_RUN_MIN_SPEED := 2.6
+const GLIDE_LAUNCH_SPEED := 8.2
+const GLIDE_FORWARD_SPEED := 8.8
+const GLIDE_SINK_SPEED := 0.85
+const GLIDE_MAX_SECONDS := 14.0
+const GLIDE_RECHARGE_RATE := 5.0
+var gliding := false
+var glide_energy := GLIDE_MAX_SECONDS
+var glide_wings: Node3D
 var roads: Array[PackedVector2Array] = []
 var hero_visual: Node3D
 var hero_anim: AnimationPlayer
@@ -659,10 +669,83 @@ func _player() -> void:
             hero_anim.seek(0.05, true)
         _normalize_hero_visual()
 
+    _make_glide_wings()
+
     camera = Camera3D.new()
     camera.current = true
     camera.fov = 67
     add_child(camera)
+
+
+## Minimal two-sided membrane meshes; no texture downloads, cheap on Android.
+## They are temporary wing geometry, not claimed to be the final character GLB.
+func _make_glide_wings() -> void:
+    glide_wings = Node3D.new()
+    glide_wings.name = "GlidingWings"
+    glide_wings.position = Vector3(0, 1.32, 0.25)
+    glide_wings.visible = false
+    player.add_child(glide_wings)
+    var membrane := StandardMaterial3D.new()
+    membrane.albedo_color = Color(0.38, 0.58, 0.82, 0.88)
+    membrane.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+    membrane.cull_mode = BaseMaterial3D.CULL_DISABLED
+    membrane.roughness = 0.9
+    for side in [-1.0, 1.0]:
+        var vertices := PackedVector3Array([
+            Vector3(side * 0.12, 0.0, 0.12),
+            Vector3(side * 0.68, 0.4, 0.30),
+            Vector3(side * 2.5, 0.58, 1.25),
+            Vector3(side * 1.72, -0.15, 0.84),
+            Vector3(side * 0.90, -0.65, 0.42)
+        ])
+        var arrays: Array = []
+        arrays.resize(Mesh.ARRAY_MAX)
+        arrays[Mesh.ARRAY_VERTEX] = vertices
+        arrays[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2, 0, 2, 3, 0, 3, 4])
+        var wing_mesh := ArrayMesh.new()
+        wing_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+        var wing := MeshInstance3D.new()
+        wing.name = "WingLeft" if side < 0.0 else "WingRight"
+        wing.mesh = wing_mesh
+        wing.material_override = membrane
+        wing.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+        glide_wings.add_child(wing)
+
+func _finish_glide() -> void:
+    gliding = false
+    if glide_wings != null:
+        glide_wings.visible = false
+    if player != null:
+        player.floor_snap_length = 0.35
+
+## Called by the Android button. A run launches into a glide in one tap;
+## an already-airborne hero can unfold the wings without a second jump.
+func toggle_glide() -> void:
+    if player == null or overview or (world_builder != null and world_builder.active):
+        return
+    if city_hud != null and city_hud.is_popup_open():
+        return
+    if gliding:
+        _finish_glide()
+        if city_hud != null:
+            city_hud.show_combat_message("Крылья сложены.")
+        return
+    if glide_energy < 2.0:
+        if city_hud != null:
+            city_hud.show_combat_message("Крылья устали. Отдохни на земле.")
+        return
+    if player.is_on_floor():
+        if moving_speed < GLIDE_RUN_MIN_SPEED or (city_hud != null and not city_hud.run_mode):
+            if city_hud != null:
+                city_hud.show_combat_message("Разбегись джойстиком, затем нажми «Планер».")
+            return
+        player.velocity.y = GLIDE_LAUNCH_SPEED
+    gliding = true
+    player.floor_snap_length = 0.0
+    if glide_wings != null:
+        glide_wings.visible = true
+    if city_hud != null:
+        city_hud.show_combat_message("Крылья раскрыты! Направляй полёт джойстиком.")
 
 func _load_camera_distance() -> void:
     var config := ConfigFile.new()
@@ -734,6 +817,8 @@ func _move_direction() -> Vector2:
 func _physics_process(delta: float) -> void:
     var stick := _move_direction()
     if overview:
+        if gliding:
+            _finish_glide()
         overview_center += stick * (75.0 * delta)
         overview_center.x = clampf(overview_center.x, -MAP_HALF_X, MAP_HALF_X)
         overview_center.y = clampf(overview_center.y, -MAP_HALF_Z, MAP_HALF_Z)
@@ -743,28 +828,47 @@ func _physics_process(delta: float) -> void:
         var forward := Vector3(-sin(yaw), 0.0, -cos(yaw))
         var right := Vector3(cos(yaw), 0.0, -sin(yaw))
         var direction := (right * stick.x - forward * stick.y).limit_length(1.0)
+        if gliding and stick.length() <= 0.11:
+            # Maintain forward momentum instead of stopping in mid-air.
+            direction = Vector3(-sin(player.rotation.y), 0.0, -cos(player.rotation.y))
         var pace := CHARACTER_RUN_SPEED if city_hud == null or city_hud.run_mode else CHARACTER_WALK_SPEED
-        var wanted := direction * pace
-        var acceleration := 27.0 if stick.length() > 0.11 else 46.0
+        var wanted := direction * (GLIDE_FORWARD_SPEED if gliding else pace)
+        var acceleration := 11.0 if gliding else (27.0 if stick.length() > 0.11 else 46.0)
         player.velocity.x = move_toward(player.velocity.x, wanted.x, acceleration * delta)
         player.velocity.z = move_toward(player.velocity.z, wanted.z, acceleration * delta)
         moving_speed = Vector2(player.velocity.x, player.velocity.z).length()
         if stick.length() > 0.11:
             var desired_yaw := atan2(-direction.x, -direction.z)
             player.rotation.y = lerp_angle(player.rotation.y, desired_yaw, minf(1.0, 15.0 * delta))
-            _play_hero("Run")
-            if hero_anim != null:
-                hero_anim.speed_scale = clampf(moving_speed / 4.8, 0.70, 1.25)
-        else:
+        if gliding:
             _play_hero("Idle")
             if hero_anim != null:
                 hero_anim.speed_scale = 1.0
-
-        if not player.is_on_floor():
-            player.velocity.y -= 20.0 * delta
+            glide_energy = maxf(0.0, glide_energy - delta)
+            if player.velocity.y > 0.0:
+                # Brief launch arc; wings slow gravity but cannot climb forever.
+                player.velocity.y = move_toward(player.velocity.y, 0.0, 12.0 * delta)
+            else:
+                player.velocity.y = move_toward(player.velocity.y, -GLIDE_SINK_SPEED, 9.0 * delta)
+            if glide_energy <= 0.0:
+                _finish_glide()
         else:
-            player.velocity.y = -0.3
+            if stick.length() > 0.11:
+                _play_hero("Run")
+                if hero_anim != null:
+                    hero_anim.speed_scale = clampf(moving_speed / 4.8, 0.70, 1.25)
+            else:
+                _play_hero("Idle")
+                if hero_anim != null:
+                    hero_anim.speed_scale = 1.0
+            if not player.is_on_floor():
+                player.velocity.y -= 20.0 * delta
+            else:
+                player.velocity.y = -0.3
+                glide_energy = minf(GLIDE_MAX_SECONDS, glide_energy + GLIDE_RECHARGE_RATE * delta)
         player.move_and_slide()
+        if gliding and player.is_on_floor():
+            _finish_glide()
         player.position.x = clampf(player.position.x, -MAP_HALF_X, MAP_HALF_X)
         player.position.z = clampf(player.position.z, -MAP_HALF_Z, MAP_HALF_Z)
     _update_camera()
