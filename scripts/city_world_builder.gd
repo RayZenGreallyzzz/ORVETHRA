@@ -49,7 +49,7 @@ func _ready() -> void:
     tint_ok = _tint(Color(0.10, 0.89, 0.56, 0.27))
     tint_no = _tint(Color(1.0, 0.20, 0.15, 0.38))
     _load_layout()
-    _seed_initial_town_if_empty()
+    _clear_existing_city_buildings_once()
     _rebuild()
     _create_ui()
     modular_editor = ModularEditor.new()
@@ -700,53 +700,22 @@ func export_city_blueprint() -> void:
 
 ## First-launch starter town. Never overwrite an existing player layout.
 ## The dedicated modular blacksmith is spawned separately by city_preview.gd.
-## Populate the town once, including on installs with an earlier starter layout.
-## The marker prevents repopulation after players move or delete buildings.
-const TOWN_PLAN_MARKER := "user://orvethra_town_plan_v2.marker"
+## Existing Android installs already saved the earlier auto-populated city.
+## Clear those placed prefab buildings once; future player-built placements remain.
+const EMPTY_CITY_MARKER := "user://orvethra_empty_city_v3.marker"
 
-func _seed_initial_town_if_empty() -> void:
-    if FileAccess.file_exists(TOWN_PLAN_MARKER):
+func _clear_existing_city_buildings_once() -> void:
+    if FileAccess.file_exists(EMPTY_CITY_MARKER):
         return
-    # Keep pre-existing placements and saved player edits intact.
-    var planned := [
-        "tavern", "auction", "manor",
-        "village", "village", "village", "village", "village",
-        "manor", "village", "village", "village", "village",
-        "manor", "village", "village", "village", "village",
-        "village", "village", "village", "village"
-    ]
-    var added := 0
-    for key in planned:
-        if saved.size() >= LIMIT:
-            break
-        # Spread the initial town across four quarters, not one crowded row.
-        var chosen: Dictionary = {}
-        var best_score := -INF
-        for gz in range(-76, 77, 9):
-            for gx in range(-91, 92, 9):
-                var entry := _new_entry(key, Vector2(float(gx), float(gz)))
-                if not _position_ok(entry):
-                    continue
-                var point := Vector2(float(gx), float(gz))
-                var nearest := 100.0
-                for other in saved:
-                    nearest = minf(nearest, point.distance_to(Vector2(float(other["x"]), float(other["z"]))))
-                # Prefer nearby streets while avoiding overly dense clusters.
-                var road_distance := 1000.0
-                for road in game.roads:
-                    for j in range(road.size() - 1):
-                        road_distance = minf(road_distance, _point_segment_distance(point, road[j], road[j + 1]))
-                var score := minf(nearest, 27.0) * 1.7 - absf(road_distance - 12.0) * 1.3
-                if score > best_score:
-                    best_score = score
-                    chosen = entry
-        if not chosen.is_empty():
-            saved.append(chosen)
-            added += 1
-    if added > 0 and not _save_layout():
-        push_warning("Town placement not saved; retry on next launch")
+    if not saved.is_empty():
+        saved.clear()
+        if not _save_layout():
+            push_error("Failed to save the cleared city layout")
+            return
+    var marker := FileAccess.open(EMPTY_CITY_MARKER, FileAccess.WRITE)
+    if marker == null:
+        push_warning("Could not mark cleared city; will retry next launch")
         return
-    var marker := FileAccess.open(TOWN_PLAN_MARKER, FileAccess.WRITE)
-    if marker != null:
-        marker.store_string("v2: " + str(added) + " generated placements")
-        marker.close()
+    marker.store_string("Residential and prefab city placements cleared")
+    marker.close()
+
