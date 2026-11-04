@@ -18,3 +18,8 @@ jobs:
         run: godot --headless --path . --editor --import --quit
       - name: Parse playable city scene
         run: godot --headless --path . --quit-after 120 res://scenes/city_preview.tscn
+      - name: Verify Android gliding mechanics
+        run: |
+          timeout 100 godot --headless --path . --script res://tests/gliding_smoke.gd 2>&1 | tee gliding-test.log
+          grep -q 'GLIDING_TEST_OK' gliding-test.log
+          if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call' gliding-test.log; then exit 1; fi
