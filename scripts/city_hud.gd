@@ -26,6 +26,7 @@ var chat_label: Label
 var attack_button: Button
 var target_button: Button
 var run_button: Button
+var glide_button: Button
 var potion_button: Button
 var skill_five: Button
 var skill_ten: Button
@@ -184,6 +185,9 @@ func _ready() -> void:
     attack_button.pressed.connect(_attack)
     run_button = _button("➤", true)
     run_button.pressed.connect(_toggle_run)
+    glide_button = _button("🪽\nПланер", true)
+    glide_button.add_theme_font_size_override("font_size", 14)
+    glide_button.pressed.connect(_toggle_glide)
     potion_button = _button("✦\n5", true)
     potion_button.pressed.connect(_use_potion)
     skill_five = _button("🔒\nLv. 5", true)
@@ -266,6 +270,8 @@ func _layout() -> void:
     target_button.size = Vector2(90, 90)
     run_button.position = Vector2(screen.x - 211, screen.y - 64)
     run_button.size = Vector2(54, 54)
+    glide_button.position = Vector2(screen.x - 263, screen.y - 218)
+    glide_button.size = Vector2(88, 58)
     potion_button.position = Vector2(screen.x - 264, screen.y - 283)
     potion_button.size = Vector2(60, 60)
     skill_five.position = Vector2(screen.x - 189, screen.y - 299)
@@ -292,6 +298,7 @@ func _layout() -> void:
         map_header.add_theme_font_size_override("font_size", 13)
         attack_button.scale = Vector2(0.82, 0.82)
         target_button.scale = Vector2(0.82, 0.82)
+        glide_button.scale = Vector2(0.82, 0.82)
         joystick.scale = Vector2(0.86, 0.86)
     else:
         stats.scale = Vector2.ONE
@@ -300,6 +307,7 @@ func _layout() -> void:
         map_button.scale = Vector2.ONE
         attack_button.scale = Vector2.ONE
         target_button.scale = Vector2.ONE
+        glide_button.scale = Vector2.ONE
         joystick.scale = Vector2.ONE
 
 func _process(delta: float) -> void:
@@ -315,6 +323,13 @@ func _process(delta: float) -> void:
     if refresh_time < 0.12 or game == null or game.player == null:
         return
     refresh_time = 0.0
+    if glide_button != null:
+        if game.gliding:
+            glide_button.text = "🪽\n%ds" % ceili(game.glide_energy)
+        elif game.glide_energy < game.GLIDE_MAX_SECONDS - 0.1:
+            glide_button.text = "🪽\n%d%%" % roundi(game.glide_energy / game.GLIDE_MAX_SECONDS * 100.0)
+        else:
+            glide_button.text = "🪽\nПланер"
     minimap.refresh(Vector2(game.player.position.x, game.player.position.z), game.player.rotation.y)
     catacomb_entry.visible = game._catacombs_is_near() and not is_popup_open()
     greg_interact.visible = game._can_greg_interact() and not is_popup_open()
@@ -532,6 +547,10 @@ func _attack() -> void:
     attack_flash = 0.3
     if game.has_method("_try_attack"):
         game._try_attack()
+
+func _toggle_glide() -> void:
+    if game != null and game.has_method("toggle_glide"):
+        game.toggle_glide()
 
 func _toggle_run() -> void:
     run_mode = not run_mode
