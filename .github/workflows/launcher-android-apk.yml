@@ -204,6 +204,15 @@ jobs:
           if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call|Invalid get index|ERROR: Failed loading' build/world-builder-test.log; then
             exit 1
           fi
+      - name: Validate Android gliding button and takeoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 100 godot --headless --path . --script res://tests/gliding_smoke.gd 2>&1 | tee build/gliding-test.log
+          grep -q 'GLIDING_TEST_OK' build/gliding-test.log
+          if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call' build/gliding-test.log; then
+            exit 1
+          fi
       - name: Validate modular mansion construction and offline blueprints
         shell: bash
         run: |
