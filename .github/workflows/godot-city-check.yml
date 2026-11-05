@@ -1,7 +1,7 @@
 name: Godot city validation
 on:
   push:
-    branches: [feature/android-training-client-v1]
+    branches: [feature/android-training-client-v1, feature/orvethra-gameplay-foundation-v1]
   workflow_dispatch:
 jobs:
   parse-and-import:

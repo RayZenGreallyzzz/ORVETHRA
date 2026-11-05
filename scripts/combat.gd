@@ -258,18 +258,10 @@ func _win(idx: int) -> void:
     var body: Area3D = mob["node"]
     body.visible = false
     body.monitorable = false
-    var earned := 12 + int(mob["rank"]) * 7
-    exp_points += earned
-    silver += 4 + int(mob["rank"]) * 2
-    var levels_up := false
-    while exp_points >= level * 40:
-        exp_points -= level * 40
-        level += 1
-        max_hp += 10
-        hp = max_hp
-        levels_up = true
+    # This scene's slimes/beetles are tutorial targets, not a farm.
+    # Real-world monsters will grant rewards through MMORPG RewardRules.
     _save()
-    _message(("Новый уровень! " if levels_up else "Победа! ") + "+" + str(earned) + " опыта, +" + str(4 + int(mob["rank"]) * 2) + " серебра")
+    _message("Тренировка завершена. Здесь нет опыта, серебра или добычи.")
     selected = -1
 
 func _message(message: String) -> void:

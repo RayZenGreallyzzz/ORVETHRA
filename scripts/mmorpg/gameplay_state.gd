@@ -1,0 +1,97 @@
+extends RefCounted
+## Composition root for offline simulation and future authoritative zone logic.
+## No scene/UI dependency and no trust in arbitrary client-supplied rewards.
+const Stats = preload("res://scripts/mmorpg/core_stats.gd")
+const Inventory = preload("res://scripts/mmorpg/inventory_system.gd")
+const Rewards = preload("res://scripts/mmorpg/reward_rules.gd")
+const Pets = preload("res://scripts/mmorpg/pet_system.gd")
+const Quests = preload("res://scripts/mmorpg/quest_rules.gd")
+const Flight = preload("res://scripts/mmorpg/flight_rules.gd")
+const Classes = preload("res://scripts/mmorpg/class_rules.gd")
+const Equipment = preload("res://scripts/mmorpg/equipment_rules.gd")
+const Balance = preload("res://scripts/mmorpg/balance_catalog.gd")
+const SAVE_VERSION := 1
+
+static func new_game(owner: String) -> Dictionary:
+	return {"version": SAVE_VERSION, "owner_id": owner,
+		"actor": Stats.make_actor(owner), "inventory": Inventory.make_inventory(),
+		"pets": Pets.new_stable(owner), "quests": Quests.new_log(),
+		"job": Classes.new_job("warrior"), "equipment": Equipment.new_equipment(),
+		"flight": Flight.new_state(), "silver": 0, "defeated_encounters": {}}
+
+## Idempotency relies on a unique encounter ID, not a reusable species string.
+## Training monsters are forcibly zero-reward, even with a malicious loot table.
+static func defeat(state: Dictionary, encounter_id: String, enemy: Dictionary,
+		rng: RandomNumberGenerator = null) -> Dictionary:
+	if encounter_id.is_empty() or state["defeated_encounters"].has(encounter_id):
+		return {"ok": false, "reason": "duplicate_encounter"}
+	var reward := Rewards.resolve(enemy, int(state["actor"]["level"]), rng)
+	if not bool(reward.get("ok", false)):
+		return reward
+	var proposed_bag: Dictionary = state["inventory"].duplicate(true)
+	for drop in reward["drops"]:
+		if Inventory.add_item(proposed_bag, str(drop["id"]), int(drop["count"])) != 0:
+			return {"ok": false, "reason": "inventory_full"}
+	var proposed_actor: Dictionary = state["actor"].duplicate(true)
+	var levels := Stats.grant_xp(proposed_actor, int(reward["xp"]))
+	# All potentially failing validation occurs BEFORE this commit.
+	state["inventory"] = proposed_bag
+	state["actor"] = proposed_actor
+	state["silver"] = int(state["silver"]) + int(reward["silver"])
+	state["defeated_encounters"][encounter_id] = true
+	if not bool(reward["training"]):
+		Quests.register_regular_kill(state["quests"], str(enemy.get("species", "")))
+		Classes.grant_job_xp(state["job"], roundi(float(reward["xp"]) * Balance.JOB_XP_SHARE))
+		var companion_id := str(state["pets"].get("active_id", ""))
+		if not companion_id.is_empty():
+			Pets.grant_pet_xp(state["pets"], companion_id, roundi(float(reward["xp"]) * Balance.PET_XP_SHARE))
+	return {"ok": true, "xp": reward["xp"], "silver": reward["silver"],
+		"drops": reward["drops"], "levels": levels, "training": reward["training"]}
+
+## Taming lifecycle is linked to the authoritative enemy defeat event.
+## These methods are called from a trusted simulation, never from user-set odds.
+static func start_tame(state: Dictionary, target_id: String, enemy: Dictionary, skill_level: int) -> Dictionary:
+	if str(enemy.get("kind", "")) == "training" or not bool(enemy.get("tameable", false)):
+		return {"ok": false, "reason": "not_tameable"}
+	var card_item := str(enemy.get("blank_card_item", ""))
+	return Pets.begin_tame(state["pets"], state["inventory"], target_id,
+		str(enemy.get("species", "")), card_item, skill_level, str(enemy.get("kind", "")))
+
+static func finish_tame(state: Dictionary, target_id: String, enemy: Dictionary,
+		rng: RandomNumberGenerator = null) -> Dictionary:
+	if not state["defeated_encounters"].has(target_id):
+		return {"ok": false, "reason": "target_not_defeated"}
+	if str(enemy.get("kind", "")) == "training" or not bool(enemy.get("tameable", false)):
+		return {"ok": false, "reason": "not_tameable"}
+	var chance := Balance.tame_chance(str(enemy.get("rarity", "basic")))
+	return Pets.finish_tame(state["pets"], state["inventory"], target_id, chance, rng)
+
+static func combine_pets(state: Dictionary, main_id: String, material_id: String,
+		rng: RandomNumberGenerator = null) -> Dictionary:
+	return Pets.combine(state["pets"], state["inventory"], main_id, material_id,
+		Balance.CATALYST_ID, Balance.PET_STAGE_CHANCES, rng)
+
+## Capture a bounded, versioned offline snapshot. Production MMO persistence must
+## store and validate this on an authenticated server instead of user:// alone.
+static func serialize(state: Dictionary) -> String:
+	return JSON.stringify(state)
+
+static func parse_offline_snapshot(data: String, expected_owner: String) -> Dictionary:
+	if data.length() > 1048576 or data.length() < 2:
+		return {"ok": false, "reason": "invalid_size"}
+	var parsed = JSON.parse_string(data)
+	if not parsed is Dictionary:
+		return {"ok": false, "reason": "invalid_json"}
+	var obj: Dictionary = parsed
+	if int(obj.get("version", -1)) != SAVE_VERSION or str(obj.get("owner_id", "")) != expected_owner:
+		return {"ok": false, "reason": "schema_or_owner"}
+	for key in ["actor", "inventory", "pets", "quests", "job", "equipment", "flight", "defeated_encounters"]:
+		if not obj.get(key) is Dictionary:
+			return {"ok": false, "reason": "missing_section_" + key}
+	if str(obj["pets"].get("owner_id", "")) != expected_owner:
+		return {"ok": false, "reason": "pet_owner_mismatch"}
+	if not obj["pets"].get("cards", {}) is Dictionary:
+		return {"ok": false, "reason": "invalid_pet_roster"}
+	if obj["pets"]["cards"].size() > Pets.MAX_CARDS:
+		return {"ok": false, "reason": "pet_roster_limit"}
+	return {"ok": true, "state": obj}

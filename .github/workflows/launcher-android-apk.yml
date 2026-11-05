@@ -2,7 +2,7 @@ name: ORVETHRA Launcher Android debug
 
 on:
   push:
-    branches: [feature/android-training-client-v1]
+    branches: [feature/android-training-client-v1, feature/orvethra-gameplay-foundation-v1]
   workflow_dispatch:
 
 permissions:

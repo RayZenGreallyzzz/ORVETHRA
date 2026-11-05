@@ -27,6 +27,10 @@ func _initialize() -> void:
 			kills += 1
 			break
 	assert(kills == 1)
+	assert(int(hero["level"]) == 1 and int(hero["xp"]) == 0)
+	assert(int(hero["silver"]) == 0)
+	assert(int(zone.monsters["training_0"]["xp_reward"]) == 0)
+	assert(zone.monsters["training_0"]["loot_table"].is_empty())
 	var silver := int(hero["silver"])
 	var dead := zone.command(42, {"seq": 40, "type": "cast_skill", "payload": {"skill_id": "basic_attack", "target_entity_id": "training_0"}}, 50000)
 	assert(dead.get("reason") == "target_dead")
