@@ -6,6 +6,7 @@ const PET_RARITY_TAME_CHANCES := {"basic": 0.80, "uncommon": 0.25,
 	"rare": 0.07, "very_rare": 0.02}
 const CATALYST_ID := "soul_catalyst"
 const PET_XP_SHARE := 0.50 # Original ORVETHRA balance default
+const JOB_XP_SHARE := 0.50 # Job progression for real-monster kills only
 
 static func tutorial_slime(level: int = 1) -> Dictionary:
 	return {"kind": "training", "species": "training_slime", "level": maxi(1, level),

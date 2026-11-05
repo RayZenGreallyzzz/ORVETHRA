@@ -8,7 +8,7 @@ This branch, `feature/orvethra-gameplay-foundation-v1`, is based on `feature/and
 | --- | --- | --- |
 | RPG stats, seven primary stats including LUK | `scripts/mmorpg/core_stats.gd` | Derived stats, leveling, equipment modifiers; game-authored balance |
 | Hit/crit/defense, MP, cooldowns | `combat_math.gd`, `skill_system.gd` | Configurable original combat formula, deterministic seeded RNG |
-| Professions and job points | `class_rules.gd` | Starting class, job XP/JP, specialization after job level 20, once-only skill learning |
+| Professions and job points | `class_rules.gd`, `gameplay_state.gd` | Starting class, job XP/JP from regular kills only (50% of XP), specialization after job level 20, once-only skill learning |
 | Equipment and inventory | `inventory_system.gd`, `equipment_rules.gd` | Slots, single-item equip with rollback on failure, stats recalculation |
 | Regular-monster rewards and drops | `reward_rules.gd`, `loot_system.gd` | Independent XP and loot penalties, bounded item-stack commit, exactly-once encounter ID |
 | **Training targets** | `server/training_zone.gd`, `scripts/combat.gd`, `reward_rules.gd` | **Never XP, silver, cards, or drops**; tutorial kill count for practice quests may still change |
@@ -44,6 +44,6 @@ godot --headless --path . --script res://tests/server_training_smoke.gd
 godot --headless --path . --script res://tests/gliding_smoke.gd
 ```
 
-`MMORPG_FOUNDATION_OK` covers regular vs training rewards, exactly-once kill IDs, quests, blank cards, capture, OB, Evo, success/failure S0–S5, class JP, equipment, economy, flight and schema serialization. Existing city/launcher tests must remain green before any branch integration.
+`MMORPG_FOUNDATION_OK` covers regular vs training rewards, exactly-once kill IDs, quests, blank cards, capture, OB, Evo, success/failure all five stage advances S1–S5, class JP, equipment, economy, flight and schema serialization. Existing city/launcher tests must remain green before any branch integration.
 
 **Recommended next step:** a separate gameplay adapter + minimal pet/inventory HUD that reuses `GameplayState`, beginning with a *regular forest wolf* **outside** the beginner training enclosure. A regular forest wolf may give XP and blank pet cards; the nine tutorial slimes never will.

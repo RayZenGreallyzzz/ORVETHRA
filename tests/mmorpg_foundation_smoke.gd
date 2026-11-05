@@ -25,6 +25,7 @@ func _initialize() -> void:
 	assert(tutorial_result["ok"] and tutorial_result["xp"] == 0)
 	assert(tutorial_result["silver"] == 0 and tutorial_result["drops"].is_empty())
 	assert(state["actor"]["level"] == 1 and state["silver"] == 0)
+	assert(int(state["job"]["job_level"]) == 1 and int(state["job"]["job_xp"]) == 0)
 	assert(quests["entries"]["hunt_wolf"]["count"] == 0)
 	assert(not Game.defeat(state, "tutorial_1", training, rng)["ok"])
 	var creature := {"kind": "regular", "species": "forest_wolf", "level": 2,
@@ -32,6 +33,7 @@ func _initialize() -> void:
 		"loot_table": [{"id": "blank_wolf", "chance": 1.0, "min": 1, "max": 1}]}
 	var rewarded: Dictionary = Game.defeat(state, "regular_wolf_1", creature, rng)
 	assert(rewarded["ok"] and rewarded["xp"] == 180 and rewarded["silver"] == 7)
+	assert(int(state["job"]["job_level"]) > 1)
 	assert(quests["entries"]["hunt_wolf"]["count"] == 1)
 	assert(not Game.defeat(state, "regular_wolf_1", creature, rng)["ok"])
 	assert(Quests.claim(quests, "hunt_wolf", state["inventory"], state["actor"])["ok"])
@@ -69,7 +71,7 @@ func _initialize() -> void:
 	assert(failed["ok"] and not failed["success"])
 	assert(card == before_card and not stable["cards"].has(third))
 	assert(Classes.new_job("invalid_class").is_empty())
-	var job: Dictionary = state["job"]
+	var job: Dictionary = Classes.new_job("warrior")
 	assert(Classes.grant_job_xp(job, Classes.job_xp_to_next(1)) == 1)
 	assert(int(job["jp"]) == 1 and Classes.learn(job, "warrior_strike", 1, 1))
 	assert(not Classes.learn(job, "warrior_strike", 1, 1))
@@ -104,6 +106,21 @@ func _initialize() -> void:
 	assert(Game.defeat(state, "pet_tutorial_reward", training, rng)["ok"])
 	assert(int(card["xp"]) == pet_xp_before + 10)
 	Pets.unsummon(stable)
+	# Exercise every stage S1..S5 at guaranteed-success TEST odds.
+	var chain_main := Pets.grant_tamed(stable, "forest_wolf")
+	for wanted_stage in range(1, 6):
+		var chain_material := Pets.grant_tamed(stable, "forest_wolf")
+		stable["cards"][chain_material]["stage"] = wanted_stage - 1
+		assert(Inventory.add_item(state["inventory"], "soul_catalyst", 1) == 0)
+		var chain: Dictionary = Pets.combine(stable, state["inventory"], chain_main,
+			chain_material, "soul_catalyst", [0, 1, 1, 1, 1, 1], rng)
+		assert(chain["ok"] and chain["success"] and chain["stage"] == wanted_stage)
+		assert(stable["cards"][chain_main]["jp"] == wanted_stage * 8)
+	assert(stable["cards"][chain_main]["appearance_stage"] == 3)
+	var maxed_extra := Pets.grant_tamed(stable, "forest_wolf")
+	stable["cards"][maxed_extra]["stage"] = 5
+	assert(Pets.combine(stable, state["inventory"], chain_main, maxed_extra,
+		"soul_catalyst", [0, 1, 1, 1, 1, 1], rng)["reason"] == "max_stage")
 	assert(state["inventory"]["stacks"].size() >= 0)
 	assert(Inventory.add_item(state["inventory"], "wood_sword", 1) == 0)
 	var equipment := Equipment.new_equipment()
