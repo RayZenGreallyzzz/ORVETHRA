@@ -4,10 +4,12 @@ on:
   push:
     branches:
       - feature/mmorpg-core-foundation
+      - feature/orvethra-gameplay-foundation-v1
   pull_request:
     paths:
       - 'scripts/mmorpg/**'
       - 'tests/mmorpg_core_smoke.gd'
+      - 'tests/mmorpg_foundation_smoke.gd'
       - '.github/workflows/mmorpg-core.yml'
   workflow_dispatch:
 
@@ -29,6 +31,8 @@ jobs:
           godot --version
           timeout 90 godot --headless --path . --script res://tests/mmorpg_core_smoke.gd 2>&1 | tee /tmp/mmorpg-core.log
           grep -q 'MMORPG_CORE_SMOKE_OK' /tmp/mmorpg-core.log
-          if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call|Invalid get index|Assertion failed' /tmp/mmorpg-core.log; then
+          timeout 90 godot --headless --path . --script res://tests/mmorpg_foundation_smoke.gd 2>&1 | tee /tmp/mmorpg-foundation.log
+          grep -q 'MMORPG_FOUNDATION_OK' /tmp/mmorpg-foundation.log
+          if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call|Invalid get index|Assertion failed' /tmp/mmorpg-core.log /tmp/mmorpg-foundation.log; then
             exit 1
           fi

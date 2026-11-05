@@ -21,9 +21,11 @@ func _init() -> void:
 		var mob: Dictionary = Stats.make_actor(id, rank, {"vit": 3 + rank, "str": 3 + rank})
 		mob["position"] = MONSTER_POSITIONS[i]
 		mob["respawn_at"] = 0
-		mob["xp_reward"] = 20 * rank
-		mob["silver_reward"] = 3 * rank
-		mob["loot_table"] = [{"id": "training_fragment", "chance": 0.25, "min": 1, "max": 1}]
+		# Tutorial targets are strictly non-rewarding by game-design decision.
+		mob["kind"] = "training"
+		mob["xp_reward"] = 0
+		mob["silver_reward"] = 0
+		mob["loot_table"] = []
 		monsters[id] = mob
 
 func join(peer_id: int, now_ms: int) -> Dictionary:
@@ -108,11 +110,14 @@ func _attack(hero: Dictionary, payload: Dictionary, now_ms: int) -> Dictionary:
 	if int(mob["hp"]) == 0:
 		mob["respawn_at"] = now_ms + RESPAWN_MS
 		result["killed"] = true
-		result["xp_gained"] = int(mob["xp_reward"])
-		result["silver_gained"] = int(mob["silver_reward"])
-		Stats.grant_xp(hero, int(mob["xp_reward"]))
-		hero["silver"] = int(hero["silver"]) + int(mob["silver_reward"])
-		var drops := Loot.roll(mob["loot_table"], rng)
+		# Do not grant rewards based on a tamperable table for tutorial enemies.
+		var tutorial := str(mob.get("kind", "training")) == "training"
+		result["xp_gained"] = 0 if tutorial else int(mob["xp_reward"])
+		result["silver_gained"] = 0 if tutorial else int(mob["silver_reward"])
+		if not tutorial:
+			Stats.grant_xp(hero, int(mob["xp_reward"]))
+			hero["silver"] = int(hero["silver"]) + int(mob["silver_reward"])
+		var drops := [] if tutorial else Loot.roll(mob["loot_table"], rng)
 		for drop in drops:
 			var item_id := str(drop["id"])
 			hero["items"][item_id] = int(hero["items"].get(item_id, 0)) + int(drop["count"])
