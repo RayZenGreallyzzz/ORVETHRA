@@ -41,6 +41,9 @@ static func defeat(state: Dictionary, encounter_id: String, enemy: Dictionary,
 	state["defeated_encounters"][encounter_id] = true
 	if not bool(reward["training"]):
 		Quests.register_regular_kill(state["quests"], str(enemy.get("species", "")))
+		var companion_id := str(state["pets"].get("active_id", ""))
+		if not companion_id.is_empty():
+			Pets.grant_pet_xp(state["pets"], companion_id, roundi(float(reward["xp"]) * Balance.PET_XP_SHARE))
 	return {"ok": true, "xp": reward["xp"], "silver": reward["silver"],
 		"drops": reward["drops"], "levels": levels, "training": reward["training"]}
 

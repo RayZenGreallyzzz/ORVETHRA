@@ -13,6 +13,7 @@ This branch, `feature/orvethra-gameplay-foundation-v1`, is based on `feature/and
 | Regular-monster rewards and drops | `reward_rules.gd`, `loot_system.gd` | Independent XP and loot penalties, bounded item-stack commit, exactly-once encounter ID |
 | **Training targets** | `server/training_zone.gd`, `scripts/combat.gd`, `reward_rules.gd` | **Never XP, silver, cards, or drops**; tutorial kill count for practice quests may still change |
 | Pet cards / taming | `pet_system.gd`, `gameplay_state.gd` | Ownership, unique card IDs, mark target with compatible blank card, defeat target, consume blank on success/failure |
+| Summoned pet combat + XP | `pet_combat_rules.gd`, `gameplay_state.gd` | Companion stats and test attack; active pet gets 50% of regular-monster XP; zero from tutorial targets |
 | Pet evolution / overbreeding | `pet_system.gd` | Evo I–III; threshold levels 50/100; OB ranges 51–60 and 101–115 grant 2 JP/level |
 | Pet staging Epic 7-inspired | `pet_system.gd` | Two tamed cards of same species/stage + catalyst, S0–S5, main card protected on failure, 8 stage JP each, visual tier at S3 |
 | Simple quests | `quest_rules.gd` | Kill progress only for regular targets, one-time claim with capacity check |
@@ -32,7 +33,7 @@ Our reference is the ORVETHRA research report dated **2026-11-04**: gameplay fee
 
 ## Boundary: foundation is not a finished MMORPG
 
-Not implemented or not integrated: live inventory/pet screens, real pet models and abilities, class UI/quests, complete server persistence, authentication/TLS/WSS, authoritative networking for all operations, anti-cheat, transactions in a real database, player trading/auction, LOD/streaming for the entire game, end-to-end tablet performance and soak tests. The server prototype still only has a small training zone. Neither a passing smoke test nor Android build verifies the game on the tablet.
+Not implemented or not integrated: live inventory/pet screens, real pet models, companion follow AI, cooldown validation and abilities, class UI/quests, complete server persistence, authentication/TLS/WSS, authoritative networking for all operations, anti-cheat, transactions in a real database, player trading/auction, LOD/streaming for the entire game, end-to-end tablet performance and soak tests. The server prototype still only has a small training zone. Neither a passing smoke test nor Android build verifies the game on the tablet.
 
 ## Testing
 

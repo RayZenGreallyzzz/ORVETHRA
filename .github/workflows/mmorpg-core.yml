@@ -33,6 +33,8 @@ jobs:
           grep -q 'MMORPG_CORE_SMOKE_OK' /tmp/mmorpg-core.log
           timeout 90 godot --headless --path . --script res://tests/mmorpg_foundation_smoke.gd 2>&1 | tee /tmp/mmorpg-foundation.log
           grep -q 'MMORPG_FOUNDATION_OK' /tmp/mmorpg-foundation.log
-          if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call|Invalid get index|Assertion failed' /tmp/mmorpg-core.log /tmp/mmorpg-foundation.log; then
+          timeout 90 godot --headless --path . --script res://tests/server_training_smoke.gd 2>&1 | tee /tmp/server-training-foundation.log
+          grep -q 'SERVER_TRAINING_SMOKE_OK' /tmp/server-training-foundation.log
+          if grep -E 'SCRIPT ERROR|Parse Error:|Invalid call|Invalid get index|Assertion failed' /tmp/mmorpg-core.log /tmp/mmorpg-foundation.log /tmp/server-training-foundation.log; then
             exit 1
           fi
