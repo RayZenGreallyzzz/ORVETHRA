@@ -34,7 +34,9 @@ static func grant_tamed(stable: Dictionary, species: String, rarity: String = "b
 		return ""
 	return _new_card(stable, species, rarity)
 
-static func begin_tame(stable: Dictionary, bag: Dictionary, target_id: String, species: String, blank_card_item: String, skill_level: int) -> Dictionary:
+static func begin_tame(stable: Dictionary, bag: Dictionary, target_id: String, species: String, blank_card_item: String, skill_level: int, creature_kind: String) -> Dictionary:
+	if creature_kind != "regular" and creature_kind != "boss":
+		return {"ok": false, "reason": "training_creatures_cannot_be_tamed"}
 	if not stable.get("pending_tame", {}).is_empty():
 		return {"ok": false, "reason": "tame_already_pending"}
 	if target_id.is_empty() or species.is_empty() or skill_level < 1 or blank_card_item.is_empty():

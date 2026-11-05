@@ -20,7 +20,8 @@ static func resolve(attacker: Dictionary, defender: Dictionary, skill: Dictionar
 	var defense := maxf(0.0, float(target.get(defense_key, 0)))
 	var power := maxf(0.0, float(skill.get("power", 1.0)))
 	var flat := maxf(0.0, float(skill.get("flat_damage", 0)))
-	var mitigation := 100.0 / (100.0 + defense)
+	# ORVETHRA authorial defense formula from design report, not official Rappelz.
+	var mitigation := 1000.0 / (1000.0 + defense)
 	var critical := random.randf() < clampf(float(source.get("critical_chance", 0.0)), 0.0, 1.0)
 	var crit_factor := maxf(1.0, float(source.get("critical_multiplier", 1.5))) if critical else 1.0
 	var damage := maxi(1, roundi((attack * power + flat) * mitigation * crit_factor))

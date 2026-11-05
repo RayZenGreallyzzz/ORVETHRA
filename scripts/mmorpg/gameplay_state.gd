@@ -7,12 +7,16 @@ const Rewards = preload("res://scripts/mmorpg/reward_rules.gd")
 const Pets = preload("res://scripts/mmorpg/pet_system.gd")
 const Quests = preload("res://scripts/mmorpg/quest_rules.gd")
 const Flight = preload("res://scripts/mmorpg/flight_rules.gd")
+const Classes = preload("res://scripts/mmorpg/class_rules.gd")
+const Equipment = preload("res://scripts/mmorpg/equipment_rules.gd")
+const Balance = preload("res://scripts/mmorpg/balance_catalog.gd")
 const SAVE_VERSION := 1
 
 static func new_game(owner: String) -> Dictionary:
 	return {"version": SAVE_VERSION, "owner_id": owner,
 		"actor": Stats.make_actor(owner), "inventory": Inventory.make_inventory(),
 		"pets": Pets.new_stable(owner), "quests": Quests.new_log(),
+		"job": Classes.new_job("warrior"), "equipment": Equipment.new_equipment(),
 		"flight": Flight.new_state(), "silver": 0, "defeated_encounters": {}}
 
 ## Idempotency relies on a unique encounter ID, not a reusable species string.
@@ -40,6 +44,29 @@ static func defeat(state: Dictionary, encounter_id: String, enemy: Dictionary,
 	return {"ok": true, "xp": reward["xp"], "silver": reward["silver"],
 		"drops": reward["drops"], "levels": levels, "training": reward["training"]}
 
+## Taming lifecycle is linked to the authoritative enemy defeat event.
+## These methods are called from a trusted simulation, never from user-set odds.
+static func start_tame(state: Dictionary, target_id: String, enemy: Dictionary, skill_level: int) -> Dictionary:
+	if str(enemy.get("kind", "")) == "training" or not bool(enemy.get("tameable", false)):
+		return {"ok": false, "reason": "not_tameable"}
+	var card_item := str(enemy.get("blank_card_item", ""))
+	return Pets.begin_tame(state["pets"], state["inventory"], target_id,
+		str(enemy.get("species", "")), card_item, skill_level, str(enemy.get("kind", "")))
+
+static func finish_tame(state: Dictionary, target_id: String, enemy: Dictionary,
+		rng: RandomNumberGenerator = null) -> Dictionary:
+	if not state["defeated_encounters"].has(target_id):
+		return {"ok": false, "reason": "target_not_defeated"}
+	if str(enemy.get("kind", "")) == "training" or not bool(enemy.get("tameable", false)):
+		return {"ok": false, "reason": "not_tameable"}
+	var chance := Balance.tame_chance(str(enemy.get("rarity", "basic")))
+	return Pets.finish_tame(state["pets"], state["inventory"], target_id, chance, rng)
+
+static func combine_pets(state: Dictionary, main_id: String, material_id: String,
+		rng: RandomNumberGenerator = null) -> Dictionary:
+	return Pets.combine(state["pets"], state["inventory"], main_id, material_id,
+		Balance.CATALYST_ID, Balance.PET_STAGE_CHANCES, rng)
+
 ## Capture a bounded, versioned offline snapshot. Production MMO persistence must
 ## store and validate this on an authenticated server instead of user:// alone.
 static func serialize(state: Dictionary) -> String:
@@ -54,7 +81,7 @@ static func parse_offline_snapshot(data: String, expected_owner: String) -> Dict
 	var obj: Dictionary = parsed
 	if int(obj.get("version", -1)) != SAVE_VERSION or str(obj.get("owner_id", "")) != expected_owner:
 		return {"ok": false, "reason": "schema_or_owner"}
-	for key in ["actor", "inventory", "pets", "quests", "flight", "defeated_encounters"]:
+	for key in ["actor", "inventory", "pets", "quests", "job", "equipment", "flight", "defeated_encounters"]:
 		if not obj.get(key) is Dictionary:
 			return {"ok": false, "reason": "missing_section_" + key}
 	if str(obj["pets"].get("owner_id", "")) != expected_owner:

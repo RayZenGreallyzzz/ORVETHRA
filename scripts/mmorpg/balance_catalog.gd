@@ -13,6 +13,7 @@ static func tutorial_slime(level: int = 1) -> Dictionary:
 static func wild_wolf(level: int = 10) -> Dictionary:
 	return {"kind": "regular", "species": "forest_wolf", "level": maxi(1, level),
 		"xp_reward": 80, "silver_reward": 12, "tameable": true,
+		"rarity": "basic", "blank_card_item": "blank_wolf",
 		"xp_penalty_per_level": 0.0, "loot_penalty_per_level": 0.0,
 		"loot_table": [
 			{"id": "wolf_pelt", "chance": 0.35, "min": 1, "max": 2},

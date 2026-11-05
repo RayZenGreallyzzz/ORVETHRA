@@ -1,7 +1,8 @@
 extends RefCounted
 ## Pure, deterministic RPG stats. No character models or AI required.
-const PRIMARY := ["str", "vit", "dex", "agi", "int", "wis"]
-const DEFAULTS := {"str": 10, "vit": 10, "dex": 10, "agi": 10, "int": 10, "wis": 10}
+# Seven core attributes, including LUK, as required by the design report.
+const PRIMARY := ["str", "vit", "dex", "agi", "int", "wis", "luk"]
+const DEFAULTS := {"str": 10, "vit": 10, "dex": 10, "agi": 10, "int": 10, "wis": 10, "luk": 10}
 const MAX_LEVEL := 200
 
 static func experience_to_next(level: int) -> int:
@@ -32,6 +33,7 @@ static func recalculate(actor: Dictionary, refill: bool = false) -> void:
 	var ag := _attr(a, b, "agi")
 	var iq := _attr(a, b, "int")
 	var w := _attr(a, b, "wis")
+	var luk := _attr(a, b, "luk")
 	var derived := {
 		"max_hp": 100 + lv * 15 + v * 12,
 		"max_mp": 50 + lv * 8 + iq * 5 + w * 6,
@@ -41,7 +43,9 @@ static func recalculate(actor: Dictionary, refill: bool = false) -> void:
 		"magic_defense": lv + w * 2,
 		"accuracy": 70 + d * 2,
 		"evasion": ag * 2,
-		"critical_chance": clampf(0.03 + float(d) * 0.001, 0.0, 0.5),
+		# LUK influences crit; DEX remains tied to accuracy.
+		"luck": luk,
+		"critical_chance": clampf(0.03 + float(luk) * 0.001, 0.0, 0.5),
 		"critical_multiplier": 1.5,
 		"attack_speed": clampf(1.0 + float(ag) * 0.005, 0.5, 3.0)
 	}
